@@ -1,4 +1,11 @@
 import { Transaction, TransactionType } from '@/types/finance';
+import * as pdfjsLib from 'pdfjs-dist';
+
+// Configure worker using Vite's URL import
+pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.mjs',
+  import.meta.url
+).toString();
 
 interface ParsedTransaction {
   date: string;
@@ -9,18 +16,8 @@ interface ParsedTransaction {
 
 export async function parsePDF(file: File): Promise<ParsedTransaction[]> {
   try {
-    const pdfjsLib = await import('pdfjs-dist');
-    
-    // Use fake worker to avoid dynamic import issues with Vite
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-    
     const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ 
-      data: arrayBuffer,
-      useWorkerFetch: false,
-      isEvalSupported: false,
-      useSystemFonts: true,
-    }).promise;
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
     
     let fullText = '';
     

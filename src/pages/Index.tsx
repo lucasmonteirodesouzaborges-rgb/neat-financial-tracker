@@ -11,11 +11,13 @@ import { Header } from '@/components/Header';
 import { StatCard } from '@/components/StatCard';
 import { TransactionList } from '@/components/TransactionList';
 import { TransactionForm } from '@/components/TransactionForm';
+import { EditTransactionForm } from '@/components/EditTransactionForm';
 import { ImportDialog } from '@/components/ImportDialog';
 import { Charts } from '@/components/Charts';
 import { AdvancedCharts } from '@/components/AdvancedCharts';
 import { Filters, FilterState } from '@/components/Filters';
 import { useToast } from '@/hooks/use-toast';
+import { Transaction } from '@/types/finance';
 
 const Index = () => {
   const {
@@ -35,6 +37,7 @@ const Index = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showTransactionForm, setShowTransactionForm] = useState(false);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [filters, setFilters] = useState<FilterState>({
     startDate: null,
     endDate: null,
@@ -77,6 +80,18 @@ const Index = () => {
     toast({
       title: 'Lançamento excluído',
       description: 'O lançamento foi removido com sucesso.',
+    });
+  };
+
+  const handleEdit = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+  };
+
+  const handleEditSubmit = (id: string, updates: Partial<Transaction>) => {
+    updateTransaction(id, updates);
+    toast({
+      title: 'Lançamento atualizado!',
+      description: 'As alterações foram salvas com sucesso.',
     });
   };
 
@@ -185,6 +200,7 @@ const Index = () => {
                 categories={categories}
                 onUpdate={updateTransaction}
                 onDelete={handleDelete}
+                onEdit={handleEdit}
               />
             </div>
           </>
@@ -209,6 +225,7 @@ const Index = () => {
                 categories={categories}
                 onUpdate={updateTransaction}
                 onDelete={handleDelete}
+                onEdit={handleEdit}
               />
             </div>
           </>
@@ -242,6 +259,15 @@ const Index = () => {
         open={showImportDialog}
         onOpenChange={setShowImportDialog}
         onImport={handleImport}
+      />
+
+      <EditTransactionForm
+        open={!!editingTransaction}
+        onOpenChange={(open) => !open && setEditingTransaction(null)}
+        transaction={editingTransaction}
+        onSubmit={handleEditSubmit}
+        categories={categories}
+        onAddCategory={addCategory}
       />
     </div>
   );

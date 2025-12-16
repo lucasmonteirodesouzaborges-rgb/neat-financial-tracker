@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Clock,
   CheckCircle2,
+  Pencil,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +18,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -32,6 +34,7 @@ interface TransactionListProps {
   categories: Category[];
   onUpdate: (id: string, updates: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
+  onEdit?: (transaction: Transaction) => void;
 }
 
 export function TransactionList({
@@ -39,6 +42,7 @@ export function TransactionList({
   categories,
   onUpdate,
   onDelete,
+  onEdit,
 }: TransactionListProps) {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -213,7 +217,13 @@ export function TransactionList({
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
+                <DropdownMenuContent align="end" className="z-50">
+                  {onEdit && (
+                    <DropdownMenuItem onClick={() => onEdit(transaction)}>
+                      <Pencil className="h-4 w-4 mr-2" />
+                      Editar
+                    </DropdownMenuItem>
+                  )}
                   {isPending && (
                     <DropdownMenuItem
                       onClick={() =>
@@ -238,6 +248,7 @@ export function TransactionList({
                       Marcar como conciliado
                     </DropdownMenuItem>
                   )}
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem
                     className="text-expense"
                     onClick={() => onDelete(transaction.id)}

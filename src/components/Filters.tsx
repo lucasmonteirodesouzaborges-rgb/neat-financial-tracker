@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { format, subDays, startOfMonth, endOfMonth } from 'date-fns';
-import { CalendarIcon, Filter, X } from 'lucide-react';
+import { CalendarIcon, Filter, X, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -31,6 +31,7 @@ interface FiltersProps {
   filters: FilterState;
   onFiltersChange: (filters: FilterState) => void;
   categories: Category[];
+  onManageCategories?: () => void;
 }
 
 const quickFilters = [
@@ -48,7 +49,7 @@ const quickFilters = [
   },
 ];
 
-export function Filters({ filters, onFiltersChange, categories }: FiltersProps) {
+export function Filters({ filters, onFiltersChange, categories, onManageCategories }: FiltersProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const activeFiltersCount = [
@@ -195,6 +196,14 @@ export function Filters({ filters, onFiltersChange, categories }: FiltersProps) 
       >
         Pendentes Cat.
       </Button>
+
+      {/* Manage Categories */}
+      {onManageCategories && (
+        <Button variant="outline" size="sm" onClick={onManageCategories}>
+          <Tag className="h-4 w-4 mr-1" />
+          Categorias
+        </Button>
+      )}
 
       {/* Clear filters */}
       {activeFiltersCount > 0 && (

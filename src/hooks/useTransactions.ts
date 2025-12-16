@@ -244,6 +244,76 @@ export function useTransactions() {
     return newCategory;
   };
 
+  const updateCategory = async (id: string, updates: Partial<Category>) => {
+    const dbUpdates: any = {};
+    if (updates.name !== undefined) dbUpdates.name = updates.name;
+    if (updates.type !== undefined) dbUpdates.type = updates.type;
+    if (updates.color !== undefined) dbUpdates.color = updates.color;
+
+    const { error } = await supabase
+      .from('categories')
+      .update(dbUpdates)
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error updating category:', error);
+      return false;
+    }
+
+    setCategories(prev =>
+      prev.map(c => (c.id === id ? { ...c, ...updates } : c))
+    );
+    setCategoryMap(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(id);
+      if (existing) {
+        newMap.set(id, { ...existing, ...updates });
+      }
+      return newMap;
+    });
+    return true;
+  };
+
+  const deleteCategory = async (id: string) => {
+    // First, update all transactions using this category to have null category
+    const { error: updateError } = await supabase
+      .from('transactions')
+      .update({ category_id: null })
+      .eq('category_id', id);
+
+    if (updateError) {
+      console.error('Error updating transactions:', updateError);
+      return false;
+    }
+
+    const { error } = await supabase
+      .from('categories')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      console.error('Error deleting category:', error);
+      return false;
+    }
+
+    setCategories(prev => prev.filter(c => c.id !== id));
+    setCategoryMap(prev => {
+      const newMap = new Map(prev);
+      newMap.delete(id);
+      return newMap;
+    });
+
+    // Update transactions in state that used this category
+    const categoryName = categories.find(c => c.id === id)?.name;
+    if (categoryName) {
+      setTransactions(prev =>
+        prev.map(t => (t.category === categoryName ? { ...t, category: null } : t))
+      );
+    }
+
+    return true;
+  };
+
   const addTransaction = async (transaction: Omit<Transaction, 'id' | 'createdAt'>) => {
     if (!selectedAccount) return null;
 
@@ -420,6 +490,8 @@ export function useTransactions() {
     categories,
     initialBalance,
     addCategory,
+    updateCategory,
+    deleteCategory,
     addTransaction,
     updateTransaction,
     deleteTransaction,

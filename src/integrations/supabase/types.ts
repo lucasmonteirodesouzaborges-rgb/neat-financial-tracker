@@ -14,7 +14,167 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      accounts: {
+        Row: {
+          bank_name: string
+          company_name: string
+          created_at: string
+          id: string
+          initial_balance: number
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bank_name: string
+          company_name: string
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bank_name?: string
+          company_name?: string
+          created_at?: string
+          id?: string
+          initial_balance?: number
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          account_id: string
+          color: string | null
+          created_at: string
+          id: string
+          name: string
+          type: string
+        }
+        Insert: {
+          account_id: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          type: string
+        }
+        Update: {
+          account_id?: string
+          color?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          account_id: string
+          category_id: string | null
+          created_at: string
+          date: string
+          description: string
+          due_date: string | null
+          id: string
+          is_imported: boolean | null
+          is_reconciled: boolean | null
+          payment_method: string | null
+          status: string
+          type: string
+          updated_at: string
+          value: number
+        }
+        Insert: {
+          account_id: string
+          category_id?: string | null
+          created_at?: string
+          date: string
+          description: string
+          due_date?: string | null
+          id?: string
+          is_imported?: boolean | null
+          is_reconciled?: boolean | null
+          payment_method?: string | null
+          status?: string
+          type: string
+          updated_at?: string
+          value: number
+        }
+        Update: {
+          account_id?: string
+          category_id?: string | null
+          created_at?: string
+          date?: string
+          description?: string
+          due_date?: string | null
+          id?: string
+          is_imported?: boolean | null
+          is_reconciled?: boolean | null
+          payment_method?: string | null
+          status?: string
+          type?: string
+          updated_at?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

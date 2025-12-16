@@ -1,8 +1,11 @@
 import { useState } from 'react';
-import { Plus, Upload, Menu, X, TrendingUp } from 'lucide-react';
+import { Plus, Upload, Menu, X, TrendingUp, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { AccountSelector } from '@/components/AccountSelector';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 
 interface HeaderProps {
   onNewTransaction: () => void;
@@ -26,6 +29,19 @@ export function Header({
   onTabChange,
 }: HeaderProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { signOut } = useAuth();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    const { error } = await signOut();
+    if (error) {
+      toast({
+        title: 'Erro ao sair',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-card/80 backdrop-blur-lg border-b border-border">
@@ -40,6 +56,11 @@ export function Header({
               <h1 className="font-bold text-lg">FluxoCaixa</h1>
               <p className="text-xs text-muted-foreground">Gestão Financeira</p>
             </div>
+          </div>
+
+          {/* Account Selector - Desktop */}
+          <div className="hidden lg:flex">
+            <AccountSelector />
           </div>
 
           {/* Desktop Navigation */}
@@ -84,6 +105,14 @@ export function Header({
               <span className="hidden sm:inline">Novo Lançamento</span>
               <span className="sm:hidden">Novo</span>
             </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={handleLogout}
+              title="Sair"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
             
             {/* Mobile menu button */}
             <button
@@ -102,6 +131,11 @@ export function Header({
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
           <div className="md:hidden py-4 border-t border-border animate-slide-up">
+            {/* Account Selector - Mobile */}
+            <div className="mb-4 lg:hidden">
+              <AccountSelector />
+            </div>
+            
             <nav className="flex flex-col gap-1">
               {tabs.map((tab) => (
                 <button

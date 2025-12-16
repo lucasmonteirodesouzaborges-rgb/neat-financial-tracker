@@ -12,6 +12,7 @@ interface ParsedTransaction {
   description: string;
   value: number;
   type: TransactionType;
+  isFuture: boolean;
 }
 
 type PdfToken = { str: string; x: number; y: number };
@@ -138,6 +139,16 @@ function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
   const valuePattern = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*([CD\*])?/gi;
 
   const skipKeywords = ['SALDO', 'BLOQ', 'LIMITE', 'RESUMO', 'ANTERIOR', 'DISPONÍVEL'];
+  
+  // Detect "LANÇAMENTOS FUTUROS" section
+  const futureSectionPatterns = [
+    /LAN[CÇ]AMENTOS?\s*FUTUROS?/i,
+    /LANC\.\s*FUTUROS?/i,
+    /PREVISTOS?/i,
+    /AGENDADOS?/i,
+  ];
+  
+  let isFutureSection = false;
 
   const shouldSkip = (text: string) => {
     const upper = text.toUpperCase();
@@ -148,10 +159,21 @@ function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
     valuePattern.lastIndex = 0;
     return valuePattern.test(text);
   };
+  
+  const isFutureSectionHeader = (text: string) => {
+    return futureSectionPatterns.some(pattern => pattern.test(text));
+  };
 
   for (let i = 0; i < lines.length; i++) {
     let trimmed = lines[i]?.trim() ?? '';
     if (!trimmed) continue;
+    
+    // Check if we're entering the future transactions section
+    if (isFutureSectionHeader(trimmed)) {
+      isFutureSection = true;
+      console.log('[PDF] Detectada seção de lançamentos futuros');
+      continue;
+    }
 
     // Skip obvious non-transaction lines early
     if (shouldSkip(trimmed)) continue;
@@ -238,6 +260,7 @@ function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
       description: description.substring(0, 100),
       value: selectedValue.value,
       type,
+      isFuture: isFutureSection,
     });
   }
 
@@ -265,15 +288,32 @@ function deduplicateTransactions(transactions: ParsedTransaction[]): ParsedTrans
 export function convertPDFToTransactions(
   parsed: ParsedTransaction[]
 ): Omit<Transaction, 'id' | 'createdAt'>[] {
-  return parsed.map(row => ({
-    date: row.date,
-    description: row.description,
-    category: null,
-    value: row.value,
-    type: row.type,
-    status: 'completed' as const,
-    paymentMethod: null,
-    isImported: true,
-    isReconciled: true,
-  }));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  return parsed.map(row => {
+    // Check if date is in the future
+    const transactionDate = new Date(row.date);
+    const isDateInFuture = transactionDate > today;
+    
+    // Transaction is pending if it's in the "LANÇAMENTOS FUTUROS" section OR if date is in the future
+    const isPending = row.isFuture || isDateInFuture;
+    
+    if (isPending) {
+      console.log(`[PDF] Transação futura detectada: ${row.description} - ${row.date}`);
+    }
+    
+    return {
+      date: row.date,
+      description: row.description,
+      category: null,
+      value: row.value,
+      type: row.type,
+      status: isPending ? 'pending' as const : 'completed' as const,
+      dueDate: isPending ? row.date : undefined,
+      paymentMethod: null,
+      isImported: true,
+      isReconciled: !isPending,
+    };
+  });
 }

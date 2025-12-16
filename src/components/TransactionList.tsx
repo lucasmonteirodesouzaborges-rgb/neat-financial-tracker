@@ -212,6 +212,47 @@ export function TransactionList({
               </PopoverContent>
             </Popover>
 
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Clock className="h-4 w-4 mr-1" />
+                  Alterar Status
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-1" align="end">
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors flex items-center gap-2"
+                  onClick={() => {
+                    if (onBulkUpdate && selectedIds.size > 0) {
+                      onBulkUpdate(Array.from(selectedIds), { 
+                        status: 'completed', 
+                        isReconciled: true 
+                      });
+                      clearSelection();
+                    }
+                  }}
+                >
+                  <CheckCircle2 className="h-4 w-4 text-income" />
+                  Marcar como Realizado
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors flex items-center gap-2"
+                  onClick={() => {
+                    if (onBulkUpdate && selectedIds.size > 0) {
+                      onBulkUpdate(Array.from(selectedIds), { 
+                        status: 'pending',
+                        isReconciled: false
+                      });
+                      clearSelection();
+                    }
+                  }}
+                >
+                  <Clock className="h-4 w-4 text-warning" />
+                  Marcar como Pendente
+                </button>
+              </PopoverContent>
+            </Popover>
+
             <Popover open={editingDescription} onOpenChange={setEditingDescription}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">

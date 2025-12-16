@@ -1,10 +1,13 @@
 import { useState, useMemo } from 'react';
+import { format, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter, startOfYear, endOfYear, subMonths } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import {
   Wallet,
   TrendingUp,
   TrendingDown,
   AlertCircle,
   Clock,
+  CalendarIcon,
 } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { Header } from '@/components/Header';
@@ -18,6 +21,23 @@ import { AdvancedCharts } from '@/components/AdvancedCharts';
 import { Filters, FilterState } from '@/components/Filters';
 import { useToast } from '@/hooks/use-toast';
 import { Transaction } from '@/types/finance';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+
+type DashboardPeriod = 'month' | 'quarter' | 'semester' | 'year' | 'all' | 'custom';
 
 const Index = () => {
   const {
@@ -47,12 +67,85 @@ const Index = () => {
     onlyUncategorized: false,
   });
 
+  // Dashboard period state
+  const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>('month');
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL',
     }).format(value);
   };
+
+  // Calculate dashboard date range based on selected period
+  const dashboardDateRange = useMemo(() => {
+    const now = new Date();
+    switch (dashboardPeriod) {
+      case 'month':
+        return { start: startOfMonth(now), end: endOfMonth(now) };
+      case 'quarter':
+        return { start: startOfQuarter(now), end: endOfQuarter(now) };
+      case 'semester':
+        return { start: subMonths(startOfMonth(now), 5), end: endOfMonth(now) };
+      case 'year':
+        return { start: startOfYear(now), end: endOfYear(now) };
+      case 'custom':
+        return { start: customStartDate, end: customEndDate };
+      case 'all':
+      default:
+        return { start: undefined, end: undefined };
+    }
+  }, [dashboardPeriod, customStartDate, customEndDate]);
+
+  // Dashboard stats based on selected period
+  const dashboardStats = useMemo(() => {
+    const { start, end } = dashboardDateRange;
+    
+    const filteredTx = transactions.filter((t) => {
+      if (start && new Date(t.date) < start) return false;
+      if (end && new Date(t.date) > end) return false;
+      return true;
+    });
+
+    const completed = filteredTx.filter((t) => t.status === 'completed');
+
+    const totalIncome = completed
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    const totalExpense = completed
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    // For "all time" balance, use all completed transactions
+    const allCompleted = transactions.filter((t) => t.status === 'completed');
+    const allTimeIncome = allCompleted
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.value, 0);
+    const allTimeExpense = allCompleted
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    // Pending amounts (A Receber / A Pagar)
+    const toReceive = transactions
+      .filter((t) => t.type === 'income' && t.status === 'pending')
+      .reduce((sum, t) => sum + t.value, 0);
+    const toPay = transactions
+      .filter((t) => t.type === 'expense' && t.status === 'pending')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    return {
+      periodIncome: totalIncome,
+      periodExpense: totalExpense,
+      periodBalance: totalIncome - totalExpense,
+      currentBalance: allTimeIncome - allTimeExpense,
+      toReceive,
+      toPay,
+      projectedBalance: allTimeIncome - allTimeExpense + toReceive - toPay,
+    };
+  }, [transactions, dashboardDateRange]);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
@@ -65,6 +158,16 @@ const Index = () => {
       return true;
     });
   }, [transactions, filters]);
+
+  // Filter transactions for dashboard charts based on period
+  const dashboardTransactions = useMemo(() => {
+    const { start, end } = dashboardDateRange;
+    return transactions.filter((t) => {
+      if (start && new Date(t.date) < start) return false;
+      if (end && new Date(t.date) > end) return false;
+      return true;
+    });
+  }, [transactions, dashboardDateRange]);
 
   const handleImport = (imported: Parameters<typeof importTransactions>[0]) => {
     const count = importTransactions(imported);
@@ -83,6 +186,22 @@ const Index = () => {
     });
   };
 
+  const handleBulkUpdate = (ids: string[], updates: Partial<Transaction>) => {
+    ids.forEach((id) => updateTransaction(id, updates));
+    toast({
+      title: 'Lançamentos atualizados!',
+      description: `${ids.length} lançamento(s) foram atualizados.`,
+    });
+  };
+
+  const handleBulkDelete = (ids: string[]) => {
+    ids.forEach((id) => deleteTransaction(id));
+    toast({
+      title: 'Lançamentos excluídos',
+      description: `${ids.length} lançamento(s) foram removidos.`,
+    });
+  };
+
   const handleEdit = (transaction: Transaction) => {
     setEditingTransaction(transaction);
   };
@@ -93,6 +212,12 @@ const Index = () => {
       title: 'Lançamento atualizado!',
       description: 'As alterações foram salvas com sucesso.',
     });
+  };
+
+  const getPeriodLabel = () => {
+    const { start, end } = dashboardDateRange;
+    if (!start || !end) return 'Todo o período';
+    return `${format(start, "dd/MM/yyyy", { locale: ptBR })} - ${format(end, "dd/MM/yyyy", { locale: ptBR })}`;
   };
 
   if (!isLoaded) {
@@ -117,6 +242,68 @@ const Index = () => {
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <>
+            {/* Period Selector */}
+            <div className="flex flex-wrap items-center gap-3 p-4 bg-card rounded-xl shadow-card">
+              <span className="text-sm font-medium text-muted-foreground">Período:</span>
+              <Select value={dashboardPeriod} onValueChange={(v) => setDashboardPeriod(v as DashboardPeriod)}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="month">Mês atual</SelectItem>
+                  <SelectItem value="quarter">Trimestre</SelectItem>
+                  <SelectItem value="semester">Semestre</SelectItem>
+                  <SelectItem value="year">Ano</SelectItem>
+                  <SelectItem value="all">Todo período</SelectItem>
+                  <SelectItem value="custom">Personalizado</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {dashboardPeriod === 'custom' && (
+                <div className="flex items-center gap-2">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className={cn(!customStartDate && 'text-muted-foreground')}>
+                        <CalendarIcon className="h-4 w-4 mr-1" />
+                        {customStartDate ? format(customStartDate, 'dd/MM/yyyy') : 'Início'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={customStartDate}
+                        onSelect={setCustomStartDate}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                  <span className="text-muted-foreground">até</span>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button variant="outline" size="sm" className={cn(!customEndDate && 'text-muted-foreground')}>
+                        <CalendarIcon className="h-4 w-4 mr-1" />
+                        {customEndDate ? format(customEndDate, 'dd/MM/yyyy') : 'Fim'}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={customEndDate}
+                        onSelect={setCustomEndDate}
+                        initialFocus
+                        className="p-3 pointer-events-auto"
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
+
+              <span className="text-sm text-muted-foreground ml-auto">
+                {getPeriodLabel()}
+              </span>
+            </div>
+
             {/* Alert for uncategorized */}
             {uncategorizedCount > 0 && (
               <div className="flex items-center gap-3 p-4 bg-warning-muted rounded-xl border border-warning/30 animate-fade-in">
@@ -145,44 +332,44 @@ const Index = () => {
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <StatCard
                 title="Saldo Atual"
-                value={formatCurrency(stats.currentBalance)}
+                value={formatCurrency(dashboardStats.currentBalance)}
                 icon={Wallet}
-                variant={stats.currentBalance >= 0 ? 'income' : 'expense'}
+                variant={dashboardStats.currentBalance >= 0 ? 'income' : 'expense'}
               />
               <StatCard
-                title="Entradas (Mês)"
-                value={formatCurrency(stats.monthlyIncome)}
+                title="Entradas"
+                value={formatCurrency(dashboardStats.periodIncome)}
                 icon={TrendingUp}
                 variant="income"
               />
               <StatCard
-                title="Saídas (Mês)"
-                value={formatCurrency(stats.monthlyExpense)}
+                title="Saídas"
+                value={formatCurrency(dashboardStats.periodExpense)}
                 icon={TrendingDown}
                 variant="expense"
               />
               <StatCard
                 title="A Receber"
-                value={formatCurrency(stats.toReceive)}
+                value={formatCurrency(dashboardStats.toReceive)}
                 icon={Clock}
                 variant="income"
               />
               <StatCard
                 title="A Pagar"
-                value={formatCurrency(stats.toPay)}
+                value={formatCurrency(dashboardStats.toPay)}
                 icon={Clock}
                 variant="expense"
               />
               <StatCard
                 title="Projeção"
-                value={formatCurrency(stats.projectedBalance)}
+                value={formatCurrency(dashboardStats.projectedBalance)}
                 icon={Wallet}
-                variant={stats.projectedBalance >= 0 ? 'default' : 'expense'}
+                variant={dashboardStats.projectedBalance >= 0 ? 'default' : 'expense'}
               />
             </div>
 
             {/* Quick Charts */}
-            <Charts transactions={transactions} categories={categories} />
+            <Charts transactions={dashboardTransactions} categories={categories} />
 
             {/* Recent Transactions */}
             <div className="bg-card rounded-xl p-5 shadow-card">
@@ -201,6 +388,8 @@ const Index = () => {
                 onUpdate={updateTransaction}
                 onDelete={handleDelete}
                 onEdit={handleEdit}
+                onBulkUpdate={handleBulkUpdate}
+                onBulkDelete={handleBulkDelete}
               />
             </div>
           </>
@@ -226,6 +415,8 @@ const Index = () => {
                 onUpdate={updateTransaction}
                 onDelete={handleDelete}
                 onEdit={handleEdit}
+                onBulkUpdate={handleBulkUpdate}
+                onBulkDelete={handleBulkDelete}
               />
             </div>
           </>

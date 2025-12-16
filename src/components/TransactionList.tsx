@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -11,9 +12,14 @@ import {
   Clock,
   CheckCircle2,
   Pencil,
+  CheckSquare,
+  Square,
+  X,
+  Tag,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,6 +41,8 @@ interface TransactionListProps {
   onUpdate: (id: string, updates: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
   onEdit?: (transaction: Transaction) => void;
+  onBulkUpdate?: (ids: string[], updates: Partial<Transaction>) => void;
+  onBulkDelete?: (ids: string[]) => void;
 }
 
 export function TransactionList({
@@ -43,7 +51,12 @@ export function TransactionList({
   onUpdate,
   onDelete,
   onEdit,
+  onBulkUpdate,
+  onBulkDelete,
 }: TransactionListProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectionMode, setSelectionMode] = useState(false);
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -61,6 +74,49 @@ export function TransactionList({
     return isPast(dueDate) && !isToday(dueDate);
   };
 
+  const toggleSelection = (id: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(id)) {
+      newSelected.delete(id);
+    } else {
+      newSelected.add(id);
+    }
+    setSelectedIds(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === transactions.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(transactions.map((t) => t.id)));
+    }
+  };
+
+  const clearSelection = () => {
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+  };
+
+  const handleBulkCategorize = (categoryName: string) => {
+    if (onBulkUpdate && selectedIds.size > 0) {
+      onBulkUpdate(Array.from(selectedIds), { category: categoryName });
+      clearSelection();
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (onBulkDelete && selectedIds.size > 0) {
+      onBulkDelete(Array.from(selectedIds));
+      clearSelection();
+    }
+  };
+
+  // Get unique categories from selected transactions
+  const selectedTransactions = transactions.filter((t) => selectedIds.has(t.id));
+  const bulkCategoryOptions = categories.filter((c) => 
+    selectedTransactions.some((t) => t.type === c.type)
+  );
+
   if (transactions.length === 0) {
     return (
       <div className="text-center py-12">
@@ -77,6 +133,86 @@ export function TransactionList({
 
   return (
     <div className="space-y-2">
+      {/* Bulk Actions Bar */}
+      <div className="flex items-center justify-between gap-2 pb-2 border-b border-border">
+        <div className="flex items-center gap-2">
+          <Button
+            variant={selectionMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              if (selectionMode) {
+                clearSelection();
+              } else {
+                setSelectionMode(true);
+              }
+            }}
+          >
+            {selectionMode ? (
+              <>
+                <X className="h-4 w-4 mr-1" />
+                Cancelar
+              </>
+            ) : (
+              <>
+                <CheckSquare className="h-4 w-4 mr-1" />
+                Selecionar
+              </>
+            )}
+          </Button>
+          
+          {selectionMode && (
+            <>
+              <Button variant="ghost" size="sm" onClick={toggleSelectAll}>
+                {selectedIds.size === transactions.length ? 'Desmarcar todos' : 'Selecionar todos'}
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {selectedIds.size} selecionado{selectedIds.size !== 1 ? 's' : ''}
+              </span>
+            </>
+          )}
+        </div>
+
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Tag className="h-4 w-4 mr-1" />
+                  Categorizar
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-48 p-1" align="end">
+                {bulkCategoryOptions.length > 0 ? (
+                  bulkCategoryOptions.map((cat) => (
+                    <button
+                      key={cat.id}
+                      className="w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors"
+                      onClick={() => handleBulkCategorize(cat.name)}
+                    >
+                      {cat.name}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
+                    Selecione itens do mesmo tipo
+                  </p>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleBulkDelete}
+            >
+              <Trash2 className="h-4 w-4 mr-1" />
+              Excluir ({selectedIds.size})
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* Transaction Items */}
       {transactions.map((transaction) => {
         const isUncategorized = !transaction.category;
         const isPending = transaction.status === 'pending';
@@ -84,6 +220,7 @@ export function TransactionList({
         const filteredCategories = categories.filter(
           (c) => c.type === transaction.type
         );
+        const isSelected = selectedIds.has(transaction.id);
 
         return (
           <div
@@ -92,9 +229,19 @@ export function TransactionList({
               'flex items-center gap-4 p-4 rounded-xl bg-card shadow-card transition-all duration-200 hover:shadow-card-hover animate-slide-up',
               isUncategorized && !isPending && 'ring-2 ring-warning/50 bg-warning-muted',
               isPending && 'bg-muted/50',
-              overdue && 'ring-2 ring-expense/50 bg-expense-muted'
+              overdue && 'ring-2 ring-expense/50 bg-expense-muted',
+              isSelected && 'ring-2 ring-primary bg-primary/5'
             )}
           >
+            {/* Selection Checkbox */}
+            {selectionMode && (
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => toggleSelection(transaction.id)}
+                className="flex-shrink-0"
+              />
+            )}
+
             <div
               className={cn(
                 'flex-shrink-0 p-2 rounded-lg',

@@ -57,7 +57,7 @@ export async function parsePDF(file: File): Promise<ParsedTransaction[]> {
     // Apply year and deduplicate
     const withYear = allTransactions.map(t => ({
       ...t,
-      date: applyYearToDDMM(t.date, statementYear),
+      date: applyYearToDDMM(t.date, statementYear, t.isFuture),
     }));
 
     const unique = deduplicateTransactions(withYear);
@@ -267,10 +267,30 @@ function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
   return transactions;
 }
 
-function applyYearToDDMM(dateDDMM: string, year: number): string {
+function applyYearToDDMM(dateDDMM: string, year: number, isFuture: boolean = false): string {
   const parts = dateDDMM.split('/');
   if (parts.length !== 2) return `${year}-01-01`;
   const [day, month] = parts;
+  
+  // For future transactions, check if the date would be in the past with current year
+  // If so, use the next year
+  if (isFuture) {
+    const today = new Date();
+    const transactionMonth = parseInt(month, 10);
+    const transactionDay = parseInt(day, 10);
+    const currentMonth = today.getMonth() + 1; // 0-indexed
+    const currentDay = today.getDate();
+    
+    // If the month is before current month, or same month but day is before current day
+    // Then this future transaction must be for next year
+    if (transactionMonth < currentMonth || 
+        (transactionMonth === currentMonth && transactionDay < currentDay)) {
+      const nextYear = year + 1;
+      console.log(`[PDF] Transação futura ${dateDDMM} ajustada para ano ${nextYear}`);
+      return `${nextYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+  }
+  
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }
 

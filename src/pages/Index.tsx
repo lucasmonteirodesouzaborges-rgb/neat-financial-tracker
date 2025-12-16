@@ -284,34 +284,36 @@ const Index = () => {
         onTabChange={setActiveTab}
       />
 
-      <main className="container mx-auto px-4 py-6 space-y-6">
+      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4 sm:space-y-6">
         {/* Dashboard Tab */}
         {activeTab === 'dashboard' && (
           <>
             {/* Period Selector */}
-            <div className="flex flex-wrap items-center gap-3 p-4 bg-card rounded-xl shadow-card">
-              <span className="text-sm font-medium text-muted-foreground">Período:</span>
-              <Select value={dashboardPeriod} onValueChange={(v) => setDashboardPeriod(v as DashboardPeriod)}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="month">Mês atual</SelectItem>
-                  <SelectItem value="quarter">Trimestre</SelectItem>
-                  <SelectItem value="semester">Semestre</SelectItem>
-                  <SelectItem value="year">Ano</SelectItem>
-                  <SelectItem value="all">Todo período</SelectItem>
-                  <SelectItem value="custom">Personalizado</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-card rounded-xl shadow-card">
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-medium text-muted-foreground whitespace-nowrap">Período:</span>
+                <Select value={dashboardPeriod} onValueChange={(v) => setDashboardPeriod(v as DashboardPeriod)}>
+                  <SelectTrigger className="w-[140px] sm:w-[160px] h-9">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="month">Mês atual</SelectItem>
+                    <SelectItem value="quarter">Trimestre</SelectItem>
+                    <SelectItem value="semester">Semestre</SelectItem>
+                    <SelectItem value="year">Ano</SelectItem>
+                    <SelectItem value="all">Todo período</SelectItem>
+                    <SelectItem value="custom">Personalizado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
               {dashboardPeriod === 'custom' && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className={cn(!customStartDate && 'text-muted-foreground')}>
-                        <CalendarIcon className="h-4 w-4 mr-1" />
-                        {customStartDate ? format(customStartDate, 'dd/MM/yyyy') : 'Início'}
+                      <Button variant="outline" size="sm" className={cn("h-9 text-xs sm:text-sm", !customStartDate && 'text-muted-foreground')}>
+                        <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                        {customStartDate ? format(customStartDate, 'dd/MM/yy') : 'Início'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -324,12 +326,12 @@ const Index = () => {
                       />
                     </PopoverContent>
                   </Popover>
-                  <span className="text-muted-foreground">até</span>
+                  <span className="text-muted-foreground text-xs sm:text-sm">até</span>
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="outline" size="sm" className={cn(!customEndDate && 'text-muted-foreground')}>
-                        <CalendarIcon className="h-4 w-4 mr-1" />
-                        {customEndDate ? format(customEndDate, 'dd/MM/yyyy') : 'Fim'}
+                      <Button variant="outline" size="sm" className={cn("h-9 text-xs sm:text-sm", !customEndDate && 'text-muted-foreground')}>
+                        <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
+                        {customEndDate ? format(customEndDate, 'dd/MM/yy') : 'Fim'}
                       </Button>
                     </PopoverTrigger>
                     <PopoverContent className="w-auto p-0" align="start">
@@ -345,37 +347,39 @@ const Index = () => {
                 </div>
               )}
 
-              <span className="text-sm text-muted-foreground ml-auto">
+              <span className="text-xs sm:text-sm text-muted-foreground sm:ml-auto truncate">
                 {getPeriodLabel()}
               </span>
             </div>
 
             {/* Alert for uncategorized */}
             {uncategorizedCount > 0 && (
-              <div className="flex items-center gap-3 p-4 bg-warning-muted rounded-xl border border-warning/30 animate-fade-in">
-                <AlertCircle className="h-5 w-5 text-warning flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="font-medium text-sm">
-                    {uncategorizedCount} lançamento{uncategorizedCount > 1 ? 's' : ''} pendente{uncategorizedCount > 1 ? 's' : ''} de categorização
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Categorize para uma análise financeira mais precisa
-                  </p>
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 sm:p-4 bg-warning-muted rounded-xl border border-warning/30 animate-fade-in">
+                <div className="flex items-start gap-2 flex-1 min-w-0">
+                  <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-warning flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="font-medium text-xs sm:text-sm">
+                      {uncategorizedCount} lançamento{uncategorizedCount > 1 ? 's' : ''} pendente{uncategorizedCount > 1 ? 's' : ''} de categorização
+                    </p>
+                    <p className="text-xs text-muted-foreground hidden sm:block">
+                      Categorize para uma análise financeira mais precisa
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => {
                     setActiveTab('transactions');
                     setFilters((f) => ({ ...f, onlyUncategorized: true }));
                   }}
-                  className="text-sm font-medium text-warning hover:underline"
+                  className="text-xs sm:text-sm font-medium text-warning hover:underline whitespace-nowrap self-end sm:self-center"
                 >
-                  Categorizar agora
+                  Categorizar
                 </button>
               </div>
             )}
 
             {/* Stats Cards */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <div className="relative">
                 <StatCard
                   title="Saldo Atual"
@@ -386,11 +390,11 @@ const Index = () => {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="absolute top-2 right-2 h-6 w-6"
+                  className="absolute top-1 right-1 sm:top-2 sm:right-2 h-5 w-5 sm:h-6 sm:w-6"
                   onClick={openBalanceDialog}
                   title="Ajustar saldo inicial"
                 >
-                  <Settings className="h-3 w-3" />
+                  <Settings className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                 </Button>
               </div>
               <StatCard
@@ -429,50 +433,47 @@ const Index = () => {
             <div className="flex flex-wrap gap-2">
               <Collapsible open={showDiagnostic} onOpenChange={setShowDiagnostic}>
                 <CollapsibleTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Info className="h-4 w-4 mr-2" />
-                    {showDiagnostic ? 'Ocultar' : 'Mostrar'} Diagnóstico
+                  <Button variant="outline" size="sm" className="text-xs sm:text-sm h-8 sm:h-9">
+                    <Info className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                    <span className="hidden sm:inline">{showDiagnostic ? 'Ocultar' : 'Mostrar'} </span>Diagnóstico
                   </Button>
                 </CollapsibleTrigger>
               </Collapsible>
-              <Button variant="outline" size="sm" onClick={() => setShowReconciliation(true)}>
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                Reconciliar com Banco
+              <Button variant="outline" size="sm" onClick={() => setShowReconciliation(true)} className="text-xs sm:text-sm h-8 sm:h-9">
+                <ArrowUpDown className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Reconciliar com </span>Banco
               </Button>
             </div>
             
             <Collapsible open={showDiagnostic} onOpenChange={setShowDiagnostic}>
               <CollapsibleContent>
-                <div className="p-4 bg-muted rounded-xl space-y-3 mb-4">
-                  <h4 className="font-semibold text-sm">Auditoria de Transações</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div className="p-3 bg-background rounded-lg">
-                      <p className="text-muted-foreground">Saldo Inicial</p>
-                      <p className="font-semibold text-lg">{formatCurrency(initialBalance)}</p>
+                <div className="p-3 sm:p-4 bg-muted rounded-xl space-y-3 mb-4">
+                  <h4 className="font-semibold text-xs sm:text-sm">Auditoria de Transações</h4>
+                  <div className="grid grid-cols-2 gap-2 sm:gap-4 text-xs sm:text-sm">
+                    <div className="p-2 sm:p-3 bg-background rounded-lg">
+                      <p className="text-muted-foreground text-xs">Saldo Inicial</p>
+                      <p className="font-semibold text-sm sm:text-lg">{formatCurrency(initialBalance)}</p>
                     </div>
-                    <div className="p-3 bg-background rounded-lg">
-                      <p className="text-muted-foreground">Total Entradas</p>
-                      <p className="font-semibold text-lg text-income">{formatCurrency(dashboardStats.allTimeIncome)}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="p-2 sm:p-3 bg-background rounded-lg">
+                      <p className="text-muted-foreground text-xs">Total Entradas</p>
+                      <p className="font-semibold text-sm sm:text-lg text-income">{formatCurrency(dashboardStats.allTimeIncome)}</p>
+                      <p className="text-xs text-muted-foreground hidden sm:block">
                         {transactions.filter(t => t.type === 'income' && t.status === 'completed').length} lançamentos
                       </p>
                     </div>
-                    <div className="p-3 bg-background rounded-lg">
-                      <p className="text-muted-foreground">Total Saídas</p>
-                      <p className="font-semibold text-lg text-expense">{formatCurrency(dashboardStats.allTimeExpense)}</p>
-                      <p className="text-xs text-muted-foreground">
+                    <div className="p-2 sm:p-3 bg-background rounded-lg">
+                      <p className="text-muted-foreground text-xs">Total Saídas</p>
+                      <p className="font-semibold text-sm sm:text-lg text-expense">{formatCurrency(dashboardStats.allTimeExpense)}</p>
+                      <p className="text-xs text-muted-foreground hidden sm:block">
                         {transactions.filter(t => t.type === 'expense' && t.status === 'completed').length} lançamentos
                       </p>
                     </div>
-                    <div className="p-3 bg-background rounded-lg">
-                      <p className="text-muted-foreground">Cálculo</p>
-                      <p className="font-semibold text-sm">
-                        {formatCurrency(initialBalance)} + {formatCurrency(dashboardStats.allTimeIncome)} - {formatCurrency(dashboardStats.allTimeExpense)}
-                      </p>
-                      <p className="font-bold text-lg">= {formatCurrency(dashboardStats.currentBalance)}</p>
+                    <div className="p-2 sm:p-3 bg-background rounded-lg">
+                      <p className="text-muted-foreground text-xs">Saldo</p>
+                      <p className="font-bold text-sm sm:text-lg">= {formatCurrency(dashboardStats.currentBalance)}</p>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-xs text-muted-foreground hidden sm:block">
                     Se o saldo não corresponde ao extrato bancário, ajuste o "Saldo Inicial" clicando no ícone ⚙️ no card "Saldo Atual".
                   </p>
                 </div>

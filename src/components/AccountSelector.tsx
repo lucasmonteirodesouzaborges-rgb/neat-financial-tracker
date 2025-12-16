@@ -124,7 +124,7 @@ export function AccountSelector() {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2 w-full sm:w-auto">
       <Select
         value={selectedAccount?.id || ''}
         onValueChange={(value) => {
@@ -132,12 +132,12 @@ export function AccountSelector() {
           if (account) setSelectedAccount(account);
         }}
       >
-        <SelectTrigger className="w-[280px]">
+        <SelectTrigger className="w-full sm:w-[280px] min-w-0">
           <SelectValue placeholder="Selecione uma conta">
             {selectedAccount && (
-              <div className="flex items-center gap-2">
-                <Building2 className="h-4 w-4" />
-                <span className="truncate">
+              <div className="flex items-center gap-2 min-w-0">
+                <Building2 className="h-4 w-4 flex-shrink-0" />
+                <span className="truncate text-sm">
                   {selectedAccount.company_name} - {selectedAccount.bank_name}
                 </span>
               </div>

@@ -382,7 +382,7 @@ export function TransactionList({
           <div
             key={transaction.id}
             className={cn(
-              'flex items-center gap-4 p-4 rounded-xl bg-card shadow-card transition-all duration-200 hover:shadow-card-hover animate-slide-up',
+              'flex items-start sm:items-center gap-2 sm:gap-4 p-3 sm:p-4 rounded-xl bg-card shadow-card transition-all duration-200 hover:shadow-card-hover animate-slide-up',
               isUncategorized && !isPending && 'ring-2 ring-warning/50 bg-warning-muted',
               isPending && 'bg-muted/50',
               overdue && 'ring-2 ring-expense/50 bg-expense-muted',
@@ -394,13 +394,13 @@ export function TransactionList({
               <Checkbox
                 checked={isSelected}
                 onCheckedChange={() => toggleSelection(transaction.id)}
-                className="flex-shrink-0"
+                className="flex-shrink-0 mt-1 sm:mt-0"
               />
             )}
 
             <div
               className={cn(
-                'flex-shrink-0 p-2 rounded-lg',
+                'flex-shrink-0 p-1.5 sm:p-2 rounded-lg',
                 transaction.type === 'income'
                   ? 'bg-income/10 text-income'
                   : 'bg-expense/10 text-expense',
@@ -408,72 +408,75 @@ export function TransactionList({
               )}
             >
               {transaction.type === 'income' ? (
-                <ArrowUpCircle className="h-5 w-5" />
+                <ArrowUpCircle className="h-4 w-4 sm:h-5 sm:w-5" />
               ) : (
-                <ArrowDownCircle className="h-5 w-5" />
+                <ArrowDownCircle className="h-4 w-4 sm:h-5 sm:w-5" />
               )}
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className={cn('font-medium truncate', isPending && 'text-muted-foreground')}>
+              <div className="flex items-start sm:items-center gap-1 sm:gap-2 flex-wrap">
+                <p className={cn('font-medium text-sm sm:text-base truncate max-w-[150px] sm:max-w-none', isPending && 'text-muted-foreground')}>
                   {transaction.description}
                 </p>
                 {isPending && (
                   <Badge 
                     variant="outline" 
                     className={cn(
-                      'text-xs',
+                      'text-[10px] sm:text-xs px-1 sm:px-2',
                       overdue 
                         ? 'border-expense text-expense' 
                         : 'border-warning text-warning'
                     )}
                   >
-                    <Clock className="h-3 w-3 mr-1" />
-                    {transaction.type === 'income' ? 'A Receber' : 'A Pagar'}
+                    <Clock className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                    <span className="hidden sm:inline">{transaction.type === 'income' ? 'A Receber' : 'A Pagar'}</span>
+                    <span className="sm:hidden">Pend.</span>
                   </Badge>
                 )}
                 {transaction.isImported && (
-                  <Badge variant="secondary" className="text-xs">
-                    <Upload className="h-3 w-3 mr-1" />
+                  <Badge variant="secondary" className="text-[10px] sm:text-xs px-1 sm:px-2 hidden sm:flex">
+                    <Upload className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
                     Importado
                   </Badge>
                 )}
                 {isUncategorized && !isPending && (
                   <Badge
                     variant="outline"
-                    className="text-xs border-warning text-warning"
+                    className="text-[10px] sm:text-xs border-warning text-warning px-1 sm:px-2"
                   >
-                    <AlertCircle className="h-3 w-3 mr-1" />
-                    Categorizar
+                    <AlertCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3 mr-0.5 sm:mr-1" />
+                    <span className="hidden sm:inline">Categorizar</span>
+                    <span className="sm:hidden">Cat.</span>
                   </Badge>
                 )}
                 {overdue && (
-                  <Badge variant="destructive" className="text-xs">
+                  <Badge variant="destructive" className="text-[10px] sm:text-xs px-1 sm:px-2">
                     Vencido
                   </Badge>
                 )}
               </div>
-              <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
-                <span>
-                  {format(new Date(transaction.date), "dd 'de' MMM", {
+              <div className="flex items-center gap-2 sm:gap-3 mt-1 text-xs sm:text-sm text-muted-foreground">
+                <span className="whitespace-nowrap">
+                  {format(new Date(transaction.date), "dd/MM", {
                     locale: ptBR,
                   })}
                 </span>
                 {transaction.dueDate && (
                   <>
-                    <span>•</span>
-                    <span className={cn(overdue && 'text-expense font-medium')}>
+                    <span className="hidden sm:inline">•</span>
+                    <span className={cn("hidden sm:inline", overdue && 'text-expense font-medium')}>
                       Venc: {format(new Date(transaction.dueDate), "dd/MM", { locale: ptBR })}
                     </span>
                   </>
                 )}
-                <span>•</span>
+                <span className="hidden sm:inline">•</span>
                 {isUncategorized ? (
                   <Popover>
                     <PopoverTrigger asChild>
-                      <button className="text-warning hover:underline font-medium">
-                        Selecionar categoria
+                      <button className="text-warning hover:underline font-medium text-xs sm:text-sm">
+                        <span className="sm:hidden">+ Cat.</span>
+                        <span className="hidden sm:inline">Selecionar categoria</span>
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className="w-48 p-1" align="start">
@@ -491,21 +494,21 @@ export function TransactionList({
                     </PopoverContent>
                   </Popover>
                 ) : (
-                  <span>{transaction.category}</span>
+                  <span className="truncate max-w-[80px] sm:max-w-none">{transaction.category}</span>
                 )}
                 {transaction.paymentMethod && (
                   <>
-                    <span>•</span>
-                    <span>{getPaymentMethodLabel(transaction.paymentMethod)}</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span className="hidden sm:inline">{getPaymentMethodLabel(transaction.paymentMethod)}</span>
                   </>
                 )}
               </div>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 sm:gap-3 flex-shrink-0">
               <span
                 className={cn(
-                  'font-semibold text-lg',
+                  'font-semibold text-sm sm:text-lg whitespace-nowrap',
                   transaction.type === 'income' ? 'text-income' : 'text-expense',
                   isPending && 'opacity-60'
                 )}

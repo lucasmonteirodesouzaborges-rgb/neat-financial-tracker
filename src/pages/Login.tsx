@@ -12,7 +12,6 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSignUp, setIsSignUp] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -30,62 +29,35 @@ export default function Login() {
 
     setIsLoading(true);
 
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-        },
-      });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
 
-      setIsLoading(false);
+    setIsLoading(false);
 
-      if (error) {
-        toast({
-          title: 'Erro ao cadastrar',
-          description: error.message,
-          variant: 'destructive',
-        });
-        return;
+    if (error) {
+      let message = 'Erro ao fazer login. Tente novamente.';
+      if (error.message.includes('Invalid login credentials')) {
+        message = 'Email ou senha incorretos.';
+      } else if (error.message.includes('Email not confirmed')) {
+        message = 'Email não confirmado. Verifique sua caixa de entrada.';
       }
-
-      toast({
-        title: 'Conta criada!',
-        description: 'Você já pode fazer login.',
-      });
-      setIsSignUp(false);
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      setIsLoading(false);
-
-      if (error) {
-        let message = 'Erro ao fazer login. Tente novamente.';
-        if (error.message.includes('Invalid login credentials')) {
-          message = 'Email ou senha incorretos.';
-        } else if (error.message.includes('Email not confirmed')) {
-          message = 'Email não confirmado. Verifique sua caixa de entrada.';
-        }
-        
-        toast({
-          title: 'Erro de autenticação',
-          description: message,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      toast({
-        title: 'Login realizado',
-        description: 'Bem-vindo ao CashFlow!',
-      });
       
-      navigate('/');
+      toast({
+        title: 'Erro de autenticação',
+        description: message,
+        variant: 'destructive',
+      });
+      return;
     }
+
+    toast({
+      title: 'Login realizado',
+      description: 'Bem-vindo ao CashFlow!',
+    });
+    
+    navigate('/');
   };
 
   return (
@@ -97,7 +69,7 @@ export default function Login() {
           </div>
           <CardTitle className="text-2xl font-bold">CashFlow</CardTitle>
           <CardDescription>
-            {isSignUp ? 'Criar nova conta' : 'Controle de Fluxo de Caixa'}
+            Controle de Fluxo de Caixa
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -123,29 +95,20 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isLoading}
-                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                autoComplete="current-password"
               />
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isSignUp ? 'Cadastrando...' : 'Entrando...'}
+                  Entrando...
                 </>
               ) : (
-                isSignUp ? 'Cadastrar' : 'Entrar'
+                'Entrar'
               )}
             </Button>
           </form>
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
-              className="text-sm text-muted-foreground hover:text-primary transition-colors"
-            >
-              {isSignUp ? 'Já tem conta? Faça login' : 'Não tem conta? Cadastre-se'}
-            </button>
-          </div>
         </CardContent>
       </Card>
     </div>

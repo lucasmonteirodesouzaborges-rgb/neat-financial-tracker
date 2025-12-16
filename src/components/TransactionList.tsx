@@ -13,13 +13,14 @@ import {
   CheckCircle2,
   Pencil,
   CheckSquare,
-  Square,
   X,
   Tag,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -56,6 +57,8 @@ export function TransactionList({
 }: TransactionListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [newDescription, setNewDescription] = useState('');
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -107,6 +110,15 @@ export function TransactionList({
   const handleBulkDelete = () => {
     if (onBulkDelete && selectedIds.size > 0) {
       onBulkDelete(Array.from(selectedIds));
+      clearSelection();
+    }
+  };
+
+  const handleBulkDescription = () => {
+    if (onBulkUpdate && selectedIds.size > 0 && newDescription.trim()) {
+      onBulkUpdate(Array.from(selectedIds), { description: newDescription.trim() });
+      setNewDescription('');
+      setEditingDescription(false);
       clearSelection();
     }
   };
@@ -173,7 +185,7 @@ export function TransactionList({
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -197,6 +209,34 @@ export function TransactionList({
                     Selecione itens do mesmo tipo
                   </p>
                 )}
+              </PopoverContent>
+            </Popover>
+
+            <Popover open={editingDescription} onOpenChange={setEditingDescription}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <FileText className="h-4 w-4 mr-1" />
+                  Editar Descrição
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64 p-3" align="end">
+                <div className="space-y-3">
+                  <p className="text-sm font-medium">Nova descrição para {selectedIds.size} item(ns)</p>
+                  <Input
+                    placeholder="Digite a nova descrição"
+                    value={newDescription}
+                    onChange={(e) => setNewDescription(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleBulkDescription()}
+                  />
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1" onClick={handleBulkDescription} disabled={!newDescription.trim()}>
+                      Aplicar
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditingDescription(false)}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
               </PopoverContent>
             </Popover>
 

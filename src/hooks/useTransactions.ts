@@ -3,21 +3,27 @@ import { Transaction, DEFAULT_CATEGORIES, Category } from '@/types/finance';
 
 const STORAGE_KEY = 'cashflow_transactions';
 const CATEGORIES_KEY = 'cashflow_categories';
+const INITIAL_BALANCE_KEY = 'cashflow_initial_balance';
 
 export function useTransactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>(DEFAULT_CATEGORIES);
+  const [initialBalance, setInitialBalance] = useState<number>(0);
   const [isLoaded, setIsLoaded] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     const storedCategories = localStorage.getItem(CATEGORIES_KEY);
+    const storedInitialBalance = localStorage.getItem(INITIAL_BALANCE_KEY);
     
     if (stored) {
       setTransactions(JSON.parse(stored));
     }
     if (storedCategories) {
       setCategories(JSON.parse(storedCategories));
+    }
+    if (storedInitialBalance) {
+      setInitialBalance(parseFloat(storedInitialBalance));
     }
     setIsLoaded(true);
   }, []);
@@ -33,6 +39,16 @@ export function useTransactions() {
       localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
     }
   }, [categories, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem(INITIAL_BALANCE_KEY, initialBalance.toString());
+    }
+  }, [initialBalance, isLoaded]);
+
+  const updateInitialBalance = (value: number) => {
+    setInitialBalance(value);
+  };
 
   const addCategory = (category: Omit<Category, 'id'>) => {
     const newCategory: Category = {
@@ -122,22 +138,24 @@ export function useTransactions() {
       monthlyIncome: totalIncome,
       monthlyExpense: totalExpense,
       monthlyBalance: totalIncome - totalExpense,
-      currentBalance: allTimeIncome - allTimeExpense,
+      currentBalance: initialBalance + allTimeIncome - allTimeExpense,
       toReceive,
       toPay,
-      projectedBalance: allTimeIncome - allTimeExpense + toReceive - toPay,
+      projectedBalance: initialBalance + allTimeIncome - allTimeExpense + toReceive - toPay,
       uncategorizedCount,
     };
-  }, [transactions, uncategorizedCount]);
+  }, [transactions, uncategorizedCount, initialBalance]);
 
   return {
     transactions,
     categories,
+    initialBalance,
     addCategory,
     addTransaction,
     updateTransaction,
     deleteTransaction,
     importTransactions,
+    updateInitialBalance,
     stats,
     uncategorizedCount,
     isLoaded,

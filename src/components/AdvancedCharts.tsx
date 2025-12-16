@@ -7,8 +7,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -30,7 +28,6 @@ import {
   eachWeekOfInterval,
   eachDayOfInterval,
   isWithinInterval,
-  subQuarters,
 } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -41,10 +38,19 @@ import {
   PieChartIcon,
   BarChart3,
   Activity,
+  Clock,
+  CalendarRange,
 } from 'lucide-react';
 import { Transaction, Category } from '@/types/finance';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
 interface AdvancedChartsProps {
@@ -52,7 +58,7 @@ interface AdvancedChartsProps {
   categories: Category[];
 }
 
-type PeriodType = 'month' | 'quarter' | 'semester' | 'year';
+type PeriodType = 'month' | 'quarter' | 'semester' | 'year' | 'custom';
 
 const COLORS = [
   'hsl(192, 70%, 35%)',
@@ -70,10 +76,15 @@ const periodLabels: Record<PeriodType, string> = {
   quarter: 'Trimestre',
   semester: 'Semestre',
   year: 'Ano',
+  custom: 'Personalizado',
 };
 
 export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps) {
   const [period, setPeriod] = useState<PeriodType>('month');
+  const [customRange, setCustomRange] = useState<{ from: Date | undefined; to: Date | undefined }>({
+    from: undefined,
+    to: undefined,
+  });
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -101,8 +112,13 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
         return { start: startOfMonth(subMonths(now, 5)), end: endOfMonth(now) };
       case 'year':
         return { start: startOfYear(now), end: endOfYear(now) };
+      case 'custom':
+        return {
+          start: customRange.from || startOfMonth(now),
+          end: customRange.to || endOfMonth(now),
+        };
     }
-  }, [period]);
+  }, [period, customRange]);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) =>
@@ -112,11 +128,22 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
 
   // Summary metrics
   const metrics = useMemo(() => {
-    const income = filteredTransactions
+    const completed = filteredTransactions.filter(t => t.status === 'completed');
+    const pending = filteredTransactions.filter(t => t.status === 'pending');
+
+    const income = completed
       .filter((t) => t.type === 'income')
       .reduce((sum, t) => sum + t.value, 0);
 
-    const expense = filteredTransactions
+    const expense = completed
+      .filter((t) => t.type === 'expense')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    const toReceive = pending
+      .filter((t) => t.type === 'income')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    const toPay = pending
       .filter((t) => t.type === 'expense')
       .reduce((sum, t) => sum + t.value, 0);
 
@@ -124,14 +151,15 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
     const profitMargin = income > 0 ? ((income - expense) / income) * 100 : 0;
 
     // Compare with previous period
+    const periodDuration = dateRange.end.getTime() - dateRange.start.getTime();
     const previousRange = {
-      start: subMonths(dateRange.start, period === 'month' ? 1 : period === 'quarter' ? 3 : period === 'semester' ? 6 : 12),
-      end: subMonths(dateRange.end, period === 'month' ? 1 : period === 'quarter' ? 3 : period === 'semester' ? 6 : 12),
+      start: new Date(dateRange.start.getTime() - periodDuration),
+      end: new Date(dateRange.end.getTime() - periodDuration),
     };
 
     const previousTransactions = transactions.filter((t) =>
       isWithinInterval(new Date(t.date), previousRange)
-    );
+    ).filter(t => t.status === 'completed');
 
     const prevIncome = previousTransactions
       .filter((t) => t.type === 'income')
@@ -144,31 +172,36 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
     const incomeChange = prevIncome > 0 ? ((income - prevIncome) / prevIncome) * 100 : 0;
     const expenseChange = prevExpense > 0 ? ((expense - prevExpense) / prevExpense) * 100 : 0;
 
-    const avgTransaction = filteredTransactions.length > 0
-      ? filteredTransactions.reduce((sum, t) => sum + t.value, 0) / filteredTransactions.length
+    const avgTransaction = completed.length > 0
+      ? completed.reduce((sum, t) => sum + t.value, 0) / completed.length
       : 0;
 
     return {
       income,
       expense,
       balance,
+      toReceive,
+      toPay,
+      projectedBalance: balance + toReceive - toPay,
       profitMargin,
       incomeChange,
       expenseChange,
       transactionCount: filteredTransactions.length,
       avgTransaction,
     };
-  }, [filteredTransactions, transactions, dateRange, period]);
+  }, [filteredTransactions, transactions, dateRange]);
 
   // Balance evolution data
   const balanceEvolution = useMemo(() => {
     let intervals: Date[];
     let formatStr: string;
 
-    if (period === 'month') {
+    const daysDiff = Math.ceil((dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24));
+
+    if (daysDiff <= 31) {
       intervals = eachDayOfInterval(dateRange);
       formatStr = 'dd';
-    } else if (period === 'quarter') {
+    } else if (daysDiff <= 90) {
       intervals = eachWeekOfInterval(dateRange);
       formatStr = "dd 'de' MMM";
     } else {
@@ -180,7 +213,7 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
 
     // Get initial balance from transactions before period
     transactions
-      .filter((t) => new Date(t.date) < dateRange.start)
+      .filter((t) => new Date(t.date) < dateRange.start && t.status === 'completed')
       .forEach((t) => {
         runningBalance += t.type === 'income' ? t.value : -t.value;
       });
@@ -189,7 +222,7 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
       const nextDate = intervals[index + 1] || dateRange.end;
       const periodTx = filteredTransactions.filter((t) => {
         const txDate = new Date(t.date);
-        return txDate >= date && txDate < nextDate;
+        return txDate >= date && txDate < nextDate && t.status === 'completed';
       });
 
       const income = periodTx
@@ -209,12 +242,12 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
         saídas: expense,
       };
     });
-  }, [filteredTransactions, transactions, dateRange, period]);
+  }, [filteredTransactions, transactions, dateRange]);
 
   // Category breakdown
   const categoryBreakdown = useMemo(() => {
     const expensesByCategory = filteredTransactions
-      .filter((t) => t.type === 'expense' && t.category)
+      .filter((t) => t.type === 'expense' && t.category && t.status === 'completed')
       .reduce((acc, t) => {
         const cat = t.category || 'Sem categoria';
         acc[cat] = (acc[cat] || 0) + t.value;
@@ -236,7 +269,7 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
   // Income by category
   const incomeByCategory = useMemo(() => {
     const incomeByCategory = filteredTransactions
-      .filter((t) => t.type === 'income' && t.category)
+      .filter((t) => t.type === 'income' && t.category && t.status === 'completed')
       .reduce((acc, t) => {
         const cat = t.category || 'Sem categoria';
         acc[cat] = (acc[cat] || 0) + t.value;
@@ -256,7 +289,8 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
 
   // Monthly comparison for longer periods
   const monthlyComparison = useMemo(() => {
-    if (period === 'month') return [];
+    const daysDiff = Math.ceil((dateRange.end.getTime() - dateRange.start.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysDiff <= 31) return [];
 
     const months = eachMonthOfInterval(dateRange);
     return months.map((month) => {
@@ -264,7 +298,8 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
       const monthEnd = endOfMonth(month);
 
       const monthTx = filteredTransactions.filter((t) =>
-        isWithinInterval(new Date(t.date), { start: monthStart, end: monthEnd })
+        isWithinInterval(new Date(t.date), { start: monthStart, end: monthEnd }) &&
+        t.status === 'completed'
       );
 
       const income = monthTx
@@ -282,12 +317,12 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
         resultado: income - expense,
       };
     });
-  }, [filteredTransactions, dateRange, period]);
+  }, [filteredTransactions, dateRange]);
 
   // Top expenses
   const topExpenses = useMemo(() => {
     return filteredTransactions
-      .filter((t) => t.type === 'expense')
+      .filter((t) => t.type === 'expense' && t.status === 'completed')
       .sort((a, b) => b.value - a.value)
       .slice(0, 5);
   }, [filteredTransactions]);
@@ -329,39 +364,62 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
             {format(dateRange.end, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
           </span>
         </div>
-        <Tabs value={period} onValueChange={(v) => setPeriod(v as PeriodType)}>
-          <TabsList>
-            <TabsTrigger value="month">Mês</TabsTrigger>
-            <TabsTrigger value="quarter">Trimestre</TabsTrigger>
-            <TabsTrigger value="semester">Semestre</TabsTrigger>
-            <TabsTrigger value="year">Ano</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className="flex items-center gap-2">
+          <Tabs value={period} onValueChange={(v) => setPeriod(v as PeriodType)}>
+            <TabsList>
+              <TabsTrigger value="month">Mês</TabsTrigger>
+              <TabsTrigger value="quarter">Trimestre</TabsTrigger>
+              <TabsTrigger value="semester">Semestre</TabsTrigger>
+              <TabsTrigger value="year">Ano</TabsTrigger>
+              <TabsTrigger value="custom">
+                <CalendarRange className="h-4 w-4" />
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          {period === 'custom' && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  Selecionar Período
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <CalendarComponent
+                  mode="range"
+                  selected={customRange}
+                  onSelect={(range) => setCustomRange({ from: range?.from, to: range?.to })}
+                  numberOfMonths={2}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
       </div>
 
       {/* Key Metrics */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <Card className="p-4 bg-income-muted border-none">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Total Entradas</span>
+            <span className="text-sm font-medium text-muted-foreground">Entradas</span>
             <TrendIcon value={metrics.incomeChange} />
           </div>
-          <p className="text-2xl font-bold text-income">{formatCurrency(metrics.income)}</p>
+          <p className="text-xl font-bold text-income">{formatCurrency(metrics.income)}</p>
           <p className="text-xs text-muted-foreground mt-1">
             {metrics.incomeChange >= 0 ? '+' : ''}
-            {metrics.incomeChange.toFixed(1)}% vs período anterior
+            {metrics.incomeChange.toFixed(1)}% vs anterior
           </p>
         </Card>
 
         <Card className="p-4 bg-expense-muted border-none">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Total Saídas</span>
+            <span className="text-sm font-medium text-muted-foreground">Saídas</span>
             <TrendIcon value={-metrics.expenseChange} />
           </div>
-          <p className="text-2xl font-bold text-expense">{formatCurrency(metrics.expense)}</p>
+          <p className="text-xl font-bold text-expense">{formatCurrency(metrics.expense)}</p>
           <p className="text-xs text-muted-foreground mt-1">
             {metrics.expenseChange >= 0 ? '+' : ''}
-            {metrics.expenseChange.toFixed(1)}% vs período anterior
+            {metrics.expenseChange.toFixed(1)}% vs anterior
           </p>
         </Card>
 
@@ -370,7 +428,7 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
             <span className="text-sm font-medium text-muted-foreground">Resultado</span>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </div>
-          <p className={cn('text-2xl font-bold', metrics.balance >= 0 ? 'text-income' : 'text-expense')}>
+          <p className={cn('text-xl font-bold', metrics.balance >= 0 ? 'text-income' : 'text-expense')}>
             {formatCurrency(metrics.balance)}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
@@ -380,13 +438,31 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
 
         <Card className="p-4 border-none bg-accent">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-muted-foreground">Transações</span>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium text-muted-foreground">A Receber</span>
+            <Clock className="h-4 w-4 text-income" />
           </div>
-          <p className="text-2xl font-bold">{metrics.transactionCount}</p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Média: {formatCurrency(metrics.avgTransaction)}
+          <p className="text-xl font-bold text-income">{formatCurrency(metrics.toReceive)}</p>
+          <p className="text-xs text-muted-foreground mt-1">Pendente no período</p>
+        </Card>
+
+        <Card className="p-4 border-none bg-accent">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-muted-foreground">A Pagar</span>
+            <Clock className="h-4 w-4 text-expense" />
+          </div>
+          <p className="text-xl font-bold text-expense">{formatCurrency(metrics.toPay)}</p>
+          <p className="text-xs text-muted-foreground mt-1">Pendente no período</p>
+        </Card>
+
+        <Card className={cn('p-4 border-none', metrics.projectedBalance >= 0 ? 'bg-income-muted' : 'bg-expense-muted')}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium text-muted-foreground">Projeção</span>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <p className={cn('text-xl font-bold', metrics.projectedBalance >= 0 ? 'text-income' : 'text-expense')}>
+            {formatCurrency(metrics.projectedBalance)}
           </p>
+          <p className="text-xs text-muted-foreground mt-1">Com pendentes</p>
         </Card>
       </div>
 
@@ -445,8 +521,8 @@ export function AdvancedCharts({ transactions, categories }: AdvancedChartsProps
         </div>
       </Card>
 
-      {/* Monthly Comparison (for quarter, semester, year) */}
-      {period !== 'month' && monthlyComparison.length > 0 && (
+      {/* Monthly Comparison (for longer periods) */}
+      {monthlyComparison.length > 0 && (
         <Card className="p-5">
           <h3 className="font-semibold mb-4 flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-primary" />

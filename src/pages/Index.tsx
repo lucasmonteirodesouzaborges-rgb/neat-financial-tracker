@@ -4,6 +4,7 @@ import {
   TrendingUp,
   TrendingDown,
   AlertCircle,
+  Clock,
 } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { Header } from '@/components/Header';
@@ -37,6 +38,7 @@ const Index = () => {
     startDate: null,
     endDate: null,
     type: 'all',
+    status: 'all',
     category: 'all',
     onlyUncategorized: false,
   });
@@ -53,6 +55,7 @@ const Index = () => {
       if (filters.startDate && new Date(t.date) < filters.startDate) return false;
       if (filters.endDate && new Date(t.date) > filters.endDate) return false;
       if (filters.type !== 'all' && t.type !== filters.type) return false;
+      if (filters.status !== 'all' && t.status !== filters.status) return false;
       if (filters.category !== 'all' && t.category !== filters.category) return false;
       if (filters.onlyUncategorized && t.category) return false;
       return true;
@@ -123,7 +126,7 @@ const Index = () => {
             )}
 
             {/* Stats Cards */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
               <StatCard
                 title="Saldo Atual"
                 value={formatCurrency(stats.currentBalance)}
@@ -143,10 +146,22 @@ const Index = () => {
                 variant="expense"
               />
               <StatCard
-                title="Balanço (Mês)"
-                value={formatCurrency(stats.monthlyBalance)}
+                title="A Receber"
+                value={formatCurrency(stats.toReceive)}
+                icon={Clock}
+                variant="income"
+              />
+              <StatCard
+                title="A Pagar"
+                value={formatCurrency(stats.toPay)}
+                icon={Clock}
+                variant="expense"
+              />
+              <StatCard
+                title="Projeção"
+                value={formatCurrency(stats.projectedBalance)}
                 icon={Wallet}
-                variant={stats.monthlyBalance >= 0 ? 'default' : 'expense'}
+                variant={stats.projectedBalance >= 0 ? 'default' : 'expense'}
               />
             </div>
 

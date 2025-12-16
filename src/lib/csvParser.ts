@@ -61,6 +61,7 @@ export function convertToTransactions(parsed: ParsedRow[]): Omit<Transaction, 'i
     category: null,
     value: row.value,
     type: row.type,
+    status: 'completed' as const,
     paymentMethod: null,
     isImported: true,
     isReconciled: true,

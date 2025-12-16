@@ -1,14 +1,18 @@
 export type TransactionType = 'income' | 'expense';
 
+export type TransactionStatus = 'completed' | 'pending';
+
 export type PaymentMethod = 'pix' | 'credit_card' | 'debit_card' | 'cash' | 'transfer' | 'boleto';
 
 export interface Transaction {
   id: string;
   date: string;
+  dueDate?: string; // Data de vencimento para pendentes
   description: string;
   category: string | null;
   value: number;
   type: TransactionType;
+  status: TransactionStatus;
   paymentMethod: PaymentMethod | null;
   isImported: boolean;
   isReconciled: boolean;

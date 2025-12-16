@@ -112,21 +112,31 @@ function extractSicoobTransactionsFromTokens(tokens: PdfToken[]): ParsedTransact
     );
   };
 
-  // Group tokens into rows by Y coordinate (with tolerance)
-  const rowMap = new Map<number, PdfToken[]>();
-  for (const t of tokens) {
-    const yBucket = Math.round(t.y);
-    const arr = rowMap.get(yBucket) ?? [];
-    arr.push(t);
-    rowMap.set(yBucket, arr);
+  // Group tokens into rows by Y coordinate using tolerance (PDF columns often have tiny Y differences)
+  const sorted = [...tokens].sort((a, b) => (b.y - a.y) || (a.x - b.x));
+
+  const rows: PdfToken[][] = [];
+  const yTolerance = 2; // points
+
+  for (const t of sorted) {
+    const lastRow = rows[rows.length - 1];
+    if (!lastRow) {
+      rows.push([t]);
+      continue;
+    }
+
+    const rowY = lastRow[0].y;
+    if (Math.abs(t.y - rowY) <= yTolerance) {
+      lastRow.push(t);
+    } else {
+      rows.push([t]);
+    }
   }
 
-  // Sort rows by Y desc, sort tokens within each row by X asc
-  const rows = Array.from(rowMap.entries())
-    .sort((a, b) => b[0] - a[0])
-    .map(([, toks]) => toks.sort((a, b) => a.x - b.x));
+  // Sort tokens within each row by X asc
+  const normalizedRows = rows.map(r => r.sort((a, b) => a.x - b.x));
 
-  for (const row of rows) {
+  for (const row of normalizedRows) {
     // Find date token in this row
     const dateToken = row.find(t => isDate(t.str));
     if (!dateToken) continue;

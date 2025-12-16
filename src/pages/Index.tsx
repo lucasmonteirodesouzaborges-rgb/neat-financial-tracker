@@ -196,8 +196,8 @@ const Index = () => {
     });
   }, [transactions, dashboardDateRange]);
 
-  const handleImport = (imported: Parameters<typeof importTransactions>[0]) => {
-    const count = importTransactions(imported);
+  const handleImport = async (imported: Parameters<typeof importTransactions>[0]) => {
+    const count = await importTransactions(imported);
     toast({
       title: 'Importação concluída!',
       description: `${count} lançamentos foram importados. Categorize os itens pendentes.`,
@@ -205,24 +205,24 @@ const Index = () => {
     return count;
   };
 
-  const handleDelete = (id: string) => {
-    deleteTransaction(id);
+  const handleDelete = async (id: string) => {
+    await deleteTransaction(id);
     toast({
       title: 'Lançamento excluído',
       description: 'O lançamento foi removido com sucesso.',
     });
   };
 
-  const handleBulkUpdate = (ids: string[], updates: Partial<Transaction>) => {
-    ids.forEach((id) => updateTransaction(id, updates));
+  const handleBulkUpdate = async (ids: string[], updates: Partial<Transaction>) => {
+    await Promise.all(ids.map((id) => updateTransaction(id, updates)));
     toast({
       title: 'Lançamentos atualizados!',
       description: `${ids.length} lançamento(s) foram atualizados.`,
     });
   };
 
-  const handleBulkDelete = (ids: string[]) => {
-    ids.forEach((id) => deleteTransaction(id));
+  const handleBulkDelete = async (ids: string[]) => {
+    await Promise.all(ids.map((id) => deleteTransaction(id)));
     toast({
       title: 'Lançamentos excluídos',
       description: `${ids.length} lançamento(s) foram removidos.`,
@@ -233,8 +233,8 @@ const Index = () => {
     setEditingTransaction(transaction);
   };
 
-  const handleEditSubmit = (id: string, updates: Partial<Transaction>) => {
-    updateTransaction(id, updates);
+  const handleEditSubmit = async (id: string, updates: Partial<Transaction>) => {
+    await updateTransaction(id, updates);
     toast({
       title: 'Lançamento atualizado!',
       description: 'As alterações foram salvas com sucesso.',
@@ -247,9 +247,9 @@ const Index = () => {
     return `${format(start, "dd/MM/yyyy", { locale: ptBR })} - ${format(end, "dd/MM/yyyy", { locale: ptBR })}`;
   };
 
-  const handleSaveInitialBalance = () => {
+  const handleSaveInitialBalance = async () => {
     const value = parseFloat(tempInitialBalance.replace(',', '.')) || 0;
-    updateInitialBalance(value);
+    await updateInitialBalance(value);
     setShowBalanceDialog(false);
     toast({
       title: 'Saldo inicial atualizado!',
@@ -542,8 +542,8 @@ const Index = () => {
       <TransactionForm
         open={showTransactionForm}
         onOpenChange={setShowTransactionForm}
-        onSubmit={(transaction) => {
-          addTransaction(transaction);
+        onSubmit={async (transaction) => {
+          await addTransaction(transaction);
           toast({
             title: 'Lançamento adicionado!',
             description: 'O lançamento foi registrado com sucesso.',

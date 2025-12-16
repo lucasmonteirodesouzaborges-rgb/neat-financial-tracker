@@ -16,7 +16,7 @@ import { Transaction } from '@/types/finance';
 interface ImportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (transactions: Omit<Transaction, 'id' | 'createdAt'>[]) => number;
+  onImport: (transactions: Omit<Transaction, 'id' | 'createdAt'>[]) => Promise<number> | number;
 }
 
 export function ImportDialog({ open, onOpenChange, onImport }: ImportDialogProps) {
@@ -67,10 +67,15 @@ export function ImportDialog({ open, onOpenChange, onImport }: ImportDialogProps
     if (file) handleFile(file);
   };
 
-  const handleConfirmImport = () => {
-    const count = onImport(preview);
-    setPreview([]);
-    onOpenChange(false);
+  const handleConfirmImport = async () => {
+    setIsLoading(true);
+    try {
+      await onImport(preview);
+      setPreview([]);
+      onOpenChange(false);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const formatCurrency = (value: number) => {

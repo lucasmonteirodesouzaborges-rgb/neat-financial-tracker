@@ -12,6 +12,7 @@ import { TransactionList } from '@/components/TransactionList';
 import { TransactionForm } from '@/components/TransactionForm';
 import { ImportDialog } from '@/components/ImportDialog';
 import { Charts } from '@/components/Charts';
+import { AdvancedCharts } from '@/components/AdvancedCharts';
 import { Filters, FilterState } from '@/components/Filters';
 import { useToast } from '@/hooks/use-toast';
 
@@ -201,7 +202,7 @@ const Index = () => {
         {activeTab === 'analytics' && (
           <>
             <h2 className="text-xl font-bold">Análise Financeira</h2>
-            <Charts transactions={transactions} categories={categories} />
+            <AdvancedCharts transactions={transactions} categories={categories} />
           </>
         )}
       </main>

@@ -23,6 +23,7 @@ import { Charts } from '@/components/Charts';
 import { AdvancedCharts } from '@/components/AdvancedCharts';
 import { Filters, FilterState } from '@/components/Filters';
 import { ReconciliationTool } from '@/components/ReconciliationTool';
+import { CategoryManager } from '@/components/CategoryManager';
 import { useToast } from '@/hooks/use-toast';
 import { Transaction } from '@/types/finance';
 import { Button } from '@/components/ui/button';
@@ -64,6 +65,8 @@ const Index = () => {
     categories,
     initialBalance,
     addCategory,
+    updateCategory,
+    deleteCategory,
     addTransaction,
     updateTransaction,
     deleteTransaction,
@@ -96,6 +99,7 @@ const Index = () => {
   const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [showReconciliation, setShowReconciliation] = useState(false);
   const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -513,6 +517,7 @@ const Index = () => {
               filters={filters}
               onFiltersChange={setFilters}
               categories={categories}
+              onManageCategories={() => setShowCategoryManager(true)}
             />
 
             <div className="bg-card rounded-xl p-5 shadow-card">
@@ -622,6 +627,16 @@ const Index = () => {
         categories={categories}
         initialBalance={initialBalance}
         onUpdateTransaction={updateTransaction}
+      />
+
+      {/* Category Manager */}
+      <CategoryManager
+        open={showCategoryManager}
+        onOpenChange={setShowCategoryManager}
+        categories={categories}
+        onAddCategory={addCategory}
+        onUpdateCategory={updateCategory}
+        onDeleteCategory={deleteCategory}
       />
     </div>
   );

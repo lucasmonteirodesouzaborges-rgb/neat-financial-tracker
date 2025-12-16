@@ -8,6 +8,8 @@ import {
   AlertCircle,
   Clock,
   CalendarIcon,
+  Settings,
+  Info,
 } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { Header } from '@/components/Header';
@@ -23,6 +25,16 @@ import { useToast } from '@/hooks/use-toast';
 import { Transaction } from '@/types/finance';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Popover,
   PopoverContent,
@@ -35,6 +47,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 
 type DashboardPeriod = 'month' | 'quarter' | 'semester' | 'year' | 'all' | 'custom';
@@ -43,11 +60,13 @@ const Index = () => {
   const {
     transactions,
     categories,
+    initialBalance,
     addCategory,
     addTransaction,
     updateTransaction,
     deleteTransaction,
     importTransactions,
+    updateInitialBalance,
     stats,
     uncategorizedCount,
     isLoaded,
@@ -70,6 +89,9 @@ const Index = () => {
   // Dashboard period state
   const [dashboardPeriod, setDashboardPeriod] = useState<DashboardPeriod>('month');
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(undefined);
+  const [showBalanceDialog, setShowBalanceDialog] = useState(false);
+  const [tempInitialBalance, setTempInitialBalance] = useState('');
+  const [showDiagnostic, setShowDiagnostic] = useState(false);
   const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
 
   const formatCurrency = (value: number) => {
@@ -140,12 +162,14 @@ const Index = () => {
       periodIncome: totalIncome,
       periodExpense: totalExpense,
       periodBalance: totalIncome - totalExpense,
-      currentBalance: allTimeIncome - allTimeExpense,
+      currentBalance: initialBalance + allTimeIncome - allTimeExpense,
       toReceive,
+      allTimeIncome,
+      allTimeExpense,
       toPay,
-      projectedBalance: allTimeIncome - allTimeExpense + toReceive - toPay,
+      projectedBalance: initialBalance + allTimeIncome - allTimeExpense + toReceive - toPay,
     };
-  }, [transactions, dashboardDateRange]);
+  }, [transactions, dashboardDateRange, initialBalance]);
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter((t) => {
@@ -218,6 +242,21 @@ const Index = () => {
     const { start, end } = dashboardDateRange;
     if (!start || !end) return 'Todo o período';
     return `${format(start, "dd/MM/yyyy", { locale: ptBR })} - ${format(end, "dd/MM/yyyy", { locale: ptBR })}`;
+  };
+
+  const handleSaveInitialBalance = () => {
+    const value = parseFloat(tempInitialBalance.replace(',', '.')) || 0;
+    updateInitialBalance(value);
+    setShowBalanceDialog(false);
+    toast({
+      title: 'Saldo inicial atualizado!',
+      description: `Novo saldo inicial: ${formatCurrency(value)}`,
+    });
+  };
+
+  const openBalanceDialog = () => {
+    setTempInitialBalance(initialBalance.toString().replace('.', ','));
+    setShowBalanceDialog(true);
   };
 
   if (!isLoaded) {
@@ -330,12 +369,23 @@ const Index = () => {
 
             {/* Stats Cards */}
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-              <StatCard
-                title="Saldo Atual"
-                value={formatCurrency(dashboardStats.currentBalance)}
-                icon={Wallet}
-                variant={dashboardStats.currentBalance >= 0 ? 'income' : 'expense'}
-              />
+              <div className="relative">
+                <StatCard
+                  title="Saldo Atual"
+                  value={formatCurrency(dashboardStats.currentBalance)}
+                  icon={Wallet}
+                  variant={dashboardStats.currentBalance >= 0 ? 'income' : 'expense'}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute top-2 right-2 h-6 w-6"
+                  onClick={openBalanceDialog}
+                  title="Ajustar saldo inicial"
+                >
+                  <Settings className="h-3 w-3" />
+                </Button>
+              </div>
               <StatCard
                 title="Entradas"
                 value={formatCurrency(dashboardStats.periodIncome)}
@@ -367,6 +417,51 @@ const Index = () => {
                 variant={dashboardStats.projectedBalance >= 0 ? 'default' : 'expense'}
               />
             </div>
+
+            {/* Diagnostic Tool */}
+            <Collapsible open={showDiagnostic} onOpenChange={setShowDiagnostic}>
+              <CollapsibleTrigger asChild>
+                <Button variant="outline" size="sm" className="mb-2">
+                  <Info className="h-4 w-4 mr-2" />
+                  {showDiagnostic ? 'Ocultar' : 'Mostrar'} Diagnóstico de Saldo
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="p-4 bg-muted rounded-xl space-y-3 mb-4">
+                  <h4 className="font-semibold text-sm">Auditoria de Transações</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div className="p-3 bg-background rounded-lg">
+                      <p className="text-muted-foreground">Saldo Inicial</p>
+                      <p className="font-semibold text-lg">{formatCurrency(initialBalance)}</p>
+                    </div>
+                    <div className="p-3 bg-background rounded-lg">
+                      <p className="text-muted-foreground">Total Entradas</p>
+                      <p className="font-semibold text-lg text-income">{formatCurrency(dashboardStats.allTimeIncome)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {transactions.filter(t => t.type === 'income' && t.status === 'completed').length} lançamentos
+                      </p>
+                    </div>
+                    <div className="p-3 bg-background rounded-lg">
+                      <p className="text-muted-foreground">Total Saídas</p>
+                      <p className="font-semibold text-lg text-expense">{formatCurrency(dashboardStats.allTimeExpense)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {transactions.filter(t => t.type === 'expense' && t.status === 'completed').length} lançamentos
+                      </p>
+                    </div>
+                    <div className="p-3 bg-background rounded-lg">
+                      <p className="text-muted-foreground">Cálculo</p>
+                      <p className="font-semibold text-sm">
+                        {formatCurrency(initialBalance)} + {formatCurrency(dashboardStats.allTimeIncome)} - {formatCurrency(dashboardStats.allTimeExpense)}
+                      </p>
+                      <p className="font-bold text-lg">= {formatCurrency(dashboardStats.currentBalance)}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Se o saldo não corresponde ao extrato bancário, ajuste o "Saldo Inicial" clicando no ícone ⚙️ no card "Saldo Atual".
+                  </p>
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
             {/* Quick Charts */}
             <Charts transactions={dashboardTransactions} categories={categories} />
@@ -460,6 +555,52 @@ const Index = () => {
         categories={categories}
         onAddCategory={addCategory}
       />
+
+      {/* Balance Adjustment Dialog */}
+      <Dialog open={showBalanceDialog} onOpenChange={setShowBalanceDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ajustar Saldo Inicial</DialogTitle>
+            <DialogDescription>
+              O saldo inicial é usado para ajustar o cálculo do saldo atual. 
+              Se o saldo mostrado não corresponde ao extrato do banco, defina o valor inicial aqui.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="initialBalance">Saldo Inicial (R$)</Label>
+              <Input
+                id="initialBalance"
+                placeholder="0,00"
+                value={tempInitialBalance}
+                onChange={(e) => setTempInitialBalance(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveInitialBalance()}
+              />
+              <p className="text-xs text-muted-foreground">
+                Exemplo: Se o banco mostra R$ 9.214,87 e o app calcula R$ 9.052,79, 
+                defina o saldo inicial como 162,08 (a diferença).
+              </p>
+            </div>
+            <div className="p-3 bg-muted rounded-lg text-sm">
+              <p className="font-medium">Prévia do cálculo:</p>
+              <p>
+                {formatCurrency(parseFloat(tempInitialBalance.replace(',', '.')) || 0)} + {formatCurrency(dashboardStats.allTimeIncome)} - {formatCurrency(dashboardStats.allTimeExpense)} = {' '}
+                <span className="font-bold">
+                  {formatCurrency((parseFloat(tempInitialBalance.replace(',', '.')) || 0) + dashboardStats.allTimeIncome - dashboardStats.allTimeExpense)}
+                </span>
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowBalanceDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveInitialBalance}>
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

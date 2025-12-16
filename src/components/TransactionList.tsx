@@ -59,6 +59,9 @@ export function TransactionList({
   const [selectionMode, setSelectionMode] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
   const [newDescription, setNewDescription] = useState('');
+  
+  // Pending bulk changes - accumulated before confirmation
+  const [pendingChanges, setPendingChanges] = useState<Partial<Transaction>>({});
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -98,11 +101,46 @@ export function TransactionList({
   const clearSelection = () => {
     setSelectedIds(new Set());
     setSelectionMode(false);
+    setPendingChanges({});
   };
 
-  const handleBulkCategorize = (categoryName: string) => {
-    if (onBulkUpdate && selectedIds.size > 0) {
-      onBulkUpdate(Array.from(selectedIds), { category: categoryName });
+  // Queue changes instead of applying immediately
+  const queueCategoryChange = (categoryName: string) => {
+    setPendingChanges(prev => ({ ...prev, category: categoryName }));
+  };
+
+  const queueStatusChange = (status: 'completed' | 'pending') => {
+    if (status === 'completed') {
+      setPendingChanges(prev => ({ ...prev, status: 'completed', isReconciled: true }));
+    } else {
+      setPendingChanges(prev => ({ ...prev, status: 'pending', isReconciled: false }));
+    }
+  };
+
+  const queueDescriptionChange = () => {
+    if (newDescription.trim()) {
+      setPendingChanges(prev => ({ ...prev, description: newDescription.trim() }));
+      setNewDescription('');
+      setEditingDescription(false);
+    }
+  };
+
+  const removePendingChange = (key: keyof Transaction) => {
+    setPendingChanges(prev => {
+      const updated = { ...prev };
+      delete updated[key];
+      // Also remove related fields
+      if (key === 'status') {
+        delete updated.isReconciled;
+      }
+      return updated;
+    });
+  };
+
+  // Apply all pending changes
+  const confirmBulkChanges = () => {
+    if (onBulkUpdate && selectedIds.size > 0 && Object.keys(pendingChanges).length > 0) {
+      onBulkUpdate(Array.from(selectedIds), pendingChanges);
       clearSelection();
     }
   };
@@ -114,13 +152,16 @@ export function TransactionList({
     }
   };
 
-  const handleBulkDescription = () => {
-    if (onBulkUpdate && selectedIds.size > 0 && newDescription.trim()) {
-      onBulkUpdate(Array.from(selectedIds), { description: newDescription.trim() });
-      setNewDescription('');
-      setEditingDescription(false);
-      clearSelection();
-    }
+  // Check if there are pending changes
+  const hasPendingChanges = Object.keys(pendingChanges).length > 0;
+
+  // Get pending changes summary
+  const getPendingChangesSummary = () => {
+    const changes: string[] = [];
+    if (pendingChanges.category) changes.push(`Categoria: ${pendingChanges.category}`);
+    if (pendingChanges.status) changes.push(`Status: ${pendingChanges.status === 'completed' ? 'Realizado' : 'Pendente'}`);
+    if (pendingChanges.description) changes.push(`Descrição: ${pendingChanges.description}`);
+    return changes;
   };
 
   // Get unique categories from selected transactions
@@ -185,110 +226,144 @@ export function TransactionList({
         </div>
 
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Tag className="h-4 w-4 mr-1" />
-                  Categorizar
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-48 p-1" align="end">
-                {bulkCategoryOptions.length > 0 ? (
-                  bulkCategoryOptions.map((cat) => (
-                    <button
-                      key={cat.id}
-                      className="w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors"
-                      onClick={() => handleBulkCategorize(cat.name)}
+          <div className="flex flex-col gap-3">
+            {/* Pending Changes Preview */}
+            {hasPendingChanges && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/10 border border-primary/20">
+                <span className="text-sm font-medium text-primary">Alterações pendentes:</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {getPendingChangesSummary().map((change, index) => (
+                    <Badge 
+                      key={index} 
+                      variant="secondary" 
+                      className="text-xs cursor-pointer hover:bg-destructive/20"
+                      onClick={() => {
+                        if (change.startsWith('Categoria')) removePendingChange('category');
+                        if (change.startsWith('Status')) removePendingChange('status');
+                        if (change.startsWith('Descrição')) removePendingChange('description');
+                      }}
                     >
-                      {cat.name}
-                    </button>
-                  ))
-                ) : (
-                  <p className="px-3 py-2 text-sm text-muted-foreground">
-                    Selecione itens do mesmo tipo
-                  </p>
-                )}
-              </PopoverContent>
-            </Popover>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Clock className="h-4 w-4 mr-1" />
-                  Alterar Status
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-56 p-1" align="end">
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors flex items-center gap-2"
-                  onClick={() => {
-                    if (onBulkUpdate && selectedIds.size > 0) {
-                      onBulkUpdate(Array.from(selectedIds), { 
-                        status: 'completed', 
-                        isReconciled: true 
-                      });
-                      clearSelection();
-                    }
-                  }}
-                >
-                  <CheckCircle2 className="h-4 w-4 text-income" />
-                  Marcar como Realizado
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors flex items-center gap-2"
-                  onClick={() => {
-                    if (onBulkUpdate && selectedIds.size > 0) {
-                      onBulkUpdate(Array.from(selectedIds), { 
-                        status: 'pending',
-                        isReconciled: false
-                      });
-                      clearSelection();
-                    }
-                  }}
-                >
-                  <Clock className="h-4 w-4 text-warning" />
-                  Marcar como Pendente
-                </button>
-              </PopoverContent>
-            </Popover>
-
-            <Popover open={editingDescription} onOpenChange={setEditingDescription}>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <FileText className="h-4 w-4 mr-1" />
-                  Editar Descrição
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-64 p-3" align="end">
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Nova descrição para {selectedIds.size} item(ns)</p>
-                  <Input
-                    placeholder="Digite a nova descrição"
-                    value={newDescription}
-                    onChange={(e) => setNewDescription(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleBulkDescription()}
-                  />
-                  <div className="flex gap-2">
-                    <Button size="sm" className="flex-1" onClick={handleBulkDescription} disabled={!newDescription.trim()}>
-                      Aplicar
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setEditingDescription(false)}>
-                      Cancelar
-                    </Button>
-                  </div>
+                      {change}
+                      <X className="h-3 w-3 ml-1" />
+                    </Badge>
+                  ))}
                 </div>
-              </PopoverContent>
-            </Popover>
+                <Button 
+                  size="sm" 
+                  className="ml-auto"
+                  onClick={confirmBulkChanges}
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  Confirmar Edição ({selectedIds.size})
+                </Button>
+              </div>
+            )}
 
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleBulkDelete}
-            >
-              <Trash2 className="h-4 w-4 mr-1" />
-              Excluir ({selectedIds.size})
-            </Button>
+            {/* Bulk Action Buttons */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant={pendingChanges.category ? 'secondary' : 'outline'} size="sm">
+                    <Tag className="h-4 w-4 mr-1" />
+                    Categorizar
+                    {pendingChanges.category && <Check className="h-3 w-3 ml-1 text-income" />}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-1" align="end">
+                  {bulkCategoryOptions.length > 0 ? (
+                    bulkCategoryOptions.map((cat) => (
+                      <button
+                        key={cat.id}
+                        className={cn(
+                          "w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors",
+                          pendingChanges.category === cat.name && "bg-primary/10 text-primary"
+                        )}
+                        onClick={() => queueCategoryChange(cat.name)}
+                      >
+                        {cat.name}
+                        {pendingChanges.category === cat.name && <Check className="h-3 w-3 ml-2 inline" />}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-3 py-2 text-sm text-muted-foreground">
+                      Selecione itens do mesmo tipo
+                    </p>
+                  )}
+                </PopoverContent>
+              </Popover>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant={pendingChanges.status ? 'secondary' : 'outline'} size="sm">
+                    <Clock className="h-4 w-4 mr-1" />
+                    Alterar Status
+                    {pendingChanges.status && <Check className="h-3 w-3 ml-1 text-income" />}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-1" align="end">
+                  <button
+                    className={cn(
+                      "w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors flex items-center gap-2",
+                      pendingChanges.status === 'completed' && "bg-primary/10 text-primary"
+                    )}
+                    onClick={() => queueStatusChange('completed')}
+                  >
+                    <CheckCircle2 className="h-4 w-4 text-income" />
+                    Marcar como Realizado
+                    {pendingChanges.status === 'completed' && <Check className="h-3 w-3 ml-auto" />}
+                  </button>
+                  <button
+                    className={cn(
+                      "w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors flex items-center gap-2",
+                      pendingChanges.status === 'pending' && "bg-primary/10 text-primary"
+                    )}
+                    onClick={() => queueStatusChange('pending')}
+                  >
+                    <Clock className="h-4 w-4 text-warning" />
+                    Marcar como Pendente
+                    {pendingChanges.status === 'pending' && <Check className="h-3 w-3 ml-auto" />}
+                  </button>
+                </PopoverContent>
+              </Popover>
+
+              <Popover open={editingDescription} onOpenChange={setEditingDescription}>
+                <PopoverTrigger asChild>
+                  <Button variant={pendingChanges.description ? 'secondary' : 'outline'} size="sm">
+                    <FileText className="h-4 w-4 mr-1" />
+                    Editar Descrição
+                    {pendingChanges.description && <Check className="h-3 w-3 ml-1 text-income" />}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-64 p-3" align="end">
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium">Nova descrição para {selectedIds.size} item(ns)</p>
+                    <Input
+                      placeholder="Digite a nova descrição"
+                      value={newDescription}
+                      onChange={(e) => setNewDescription(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && queueDescriptionChange()}
+                    />
+                    <div className="flex gap-2">
+                      <Button size="sm" className="flex-1" onClick={queueDescriptionChange} disabled={!newDescription.trim()}>
+                        Adicionar
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setEditingDescription(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleBulkDelete}
+              >
+                <Trash2 className="h-4 w-4 mr-1" />
+                Excluir ({selectedIds.size})
+              </Button>
+            </div>
           </div>
         )}
       </div>

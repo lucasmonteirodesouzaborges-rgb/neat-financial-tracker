@@ -10,6 +10,7 @@ import {
   CalendarIcon,
   Settings,
   Info,
+  ArrowUpDown,
 } from 'lucide-react';
 import { useTransactions } from '@/hooks/useTransactions';
 import { Header } from '@/components/Header';
@@ -21,6 +22,7 @@ import { ImportDialog } from '@/components/ImportDialog';
 import { Charts } from '@/components/Charts';
 import { AdvancedCharts } from '@/components/AdvancedCharts';
 import { Filters, FilterState } from '@/components/Filters';
+import { ReconciliationTool } from '@/components/ReconciliationTool';
 import { useToast } from '@/hooks/use-toast';
 import { Transaction } from '@/types/finance';
 import { Button } from '@/components/ui/button';
@@ -92,6 +94,7 @@ const Index = () => {
   const [showBalanceDialog, setShowBalanceDialog] = useState(false);
   const [tempInitialBalance, setTempInitialBalance] = useState('');
   const [showDiagnostic, setShowDiagnostic] = useState(false);
+  const [showReconciliation, setShowReconciliation] = useState(false);
   const [customEndDate, setCustomEndDate] = useState<Date | undefined>(undefined);
 
   const formatCurrency = (value: number) => {
@@ -418,14 +421,23 @@ const Index = () => {
               />
             </div>
 
-            {/* Diagnostic Tool */}
+            {/* Diagnostic & Reconciliation Tools */}
+            <div className="flex flex-wrap gap-2">
+              <Collapsible open={showDiagnostic} onOpenChange={setShowDiagnostic}>
+                <CollapsibleTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Info className="h-4 w-4 mr-2" />
+                    {showDiagnostic ? 'Ocultar' : 'Mostrar'} Diagnóstico
+                  </Button>
+                </CollapsibleTrigger>
+              </Collapsible>
+              <Button variant="outline" size="sm" onClick={() => setShowReconciliation(true)}>
+                <ArrowUpDown className="h-4 w-4 mr-2" />
+                Reconciliar com Banco
+              </Button>
+            </div>
+            
             <Collapsible open={showDiagnostic} onOpenChange={setShowDiagnostic}>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm" className="mb-2">
-                  <Info className="h-4 w-4 mr-2" />
-                  {showDiagnostic ? 'Ocultar' : 'Mostrar'} Diagnóstico de Saldo
-                </Button>
-              </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="p-4 bg-muted rounded-xl space-y-3 mb-4">
                   <h4 className="font-semibold text-sm">Auditoria de Transações</h4>
@@ -601,6 +613,16 @@ const Index = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reconciliation Tool */}
+      <ReconciliationTool
+        open={showReconciliation}
+        onOpenChange={setShowReconciliation}
+        transactions={transactions}
+        categories={categories}
+        initialBalance={initialBalance}
+        onUpdateTransaction={updateTransaction}
+      />
     </div>
   );
 };

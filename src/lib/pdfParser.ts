@@ -139,28 +139,57 @@ function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
 
   const skipKeywords = ['SALDO', 'BLOQ', 'LIMITE', 'RESUMO', 'ANTERIOR', 'DISPONÍVEL'];
 
-  for (const line of lines) {
-    const trimmed = line.trim();
+  const shouldSkip = (text: string) => {
+    const upper = text.toUpperCase();
+    return skipKeywords.some(kw => upper.includes(kw));
+  };
+
+  const hasAnyValue = (text: string) => {
+    valuePattern.lastIndex = 0;
+    return valuePattern.test(text);
+  };
+
+  for (let i = 0; i < lines.length; i++) {
+    let trimmed = lines[i]?.trim() ?? '';
     if (!trimmed) continue;
 
-    // Check if line should be skipped
-    const upperLine = trimmed.toUpperCase();
-    if (skipKeywords.some(kw => upperLine.includes(kw))) {
-      continue;
-    }
+    // Skip obvious non-transaction lines early
+    if (shouldSkip(trimmed)) continue;
 
-    // Check if line starts with date DD/MM
+    // Must start with date DD/MM
     const dateMatch = trimmed.match(datePattern);
     if (!dateMatch) continue;
 
+    // Some Sicoob PDFs break a single transaction across multiple lines.
+    // If the first line has the date but no value yet, append subsequent lines
+    // until we find a value or hit a new date line.
+    let combined = trimmed;
+    while (!hasAnyValue(combined) && i + 1 < lines.length) {
+      const next = (lines[i + 1] ?? '').trim();
+      if (!next) {
+        i++;
+        continue;
+      }
+      if (datePattern.test(next)) break; // next transaction starts
+      if (shouldSkip(next)) {
+        i++;
+        continue;
+      }
+      combined = `${combined} ${next}`.replace(/\s+/g, ' ').trim();
+      i++;
+
+      // Safety: we only need a couple of extra lines to reach the value
+      if (combined.length > 400) break;
+    }
+
     const date = dateMatch[1];
 
-    // Find all values in the line
+    // Find all values in the (possibly combined) line
     const values: { value: number; suffix: string; index: number }[] = [];
     let match;
     valuePattern.lastIndex = 0;
 
-    while ((match = valuePattern.exec(trimmed)) !== null) {
+    while ((match = valuePattern.exec(combined)) !== null) {
       const numStr = match[1];
       const suffix = (match[2] || '').toUpperCase();
       const value = parseFloat(numStr.replace(/\./g, '').replace(',', '.'));
@@ -171,20 +200,15 @@ function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
 
     if (values.length === 0) continue;
 
-    // Use the last value (usually the transaction value, not balance)
-    // In Sicoob, the pattern is usually: date | description | value C/D | balance
-    // We want the first value that has a C/D suffix, or the first value if none have suffix
+    // Prefer values with C/D suffix (explicit credit/debit). Otherwise, use the first value.
+    // (Sicoob statements generally have only one money column for transactions.)
     let selectedValue = values.find(v => v.suffix === 'C' || v.suffix === 'D');
-    if (!selectedValue) {
-      selectedValue = values[0];
-    }
+    if (!selectedValue) selectedValue = values[0];
 
     // Extract description: text between date and value
-    const dateEndIndex = dateMatch.index! + dateMatch[0].length;
+    const dateEndIndex = (dateMatch.index ?? 0) + dateMatch[0].length;
     const valueStartIndex = selectedValue.index;
-    let description = trimmed.substring(dateEndIndex, valueStartIndex).trim();
-
-    // Clean up description
+    let description = combined.substring(dateEndIndex, valueStartIndex).trim();
     description = description.replace(/\s+/g, ' ').trim();
 
     if (!description || description.length < 2) continue;
@@ -196,9 +220,8 @@ function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
     } else if (selectedValue.suffix === 'C') {
       type = 'income';
     } else {
-      // Infer from description keywords
       const descUpper = description.toUpperCase();
-      const expenseKeywords = ['DEB', 'EMIT', 'TARIFA', 'PAGAMENTO', 'SAQUE', 'TED', 'DOC', 'PIX ENV'];
+      const expenseKeywords = ['DEB', 'EMIT', 'TARIFA', 'PAGAMENTO', 'SAQUE', 'TED', 'DOC', 'PIX ENV', 'TRANSF.'];
       const incomeKeywords = ['REC', 'CRED', 'DEP', 'PIX REC', 'TRANSF REC'];
 
       if (expenseKeywords.some(kw => descUpper.includes(kw))) {
@@ -206,7 +229,6 @@ function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
       } else if (incomeKeywords.some(kw => descUpper.includes(kw))) {
         type = 'income';
       } else {
-        // Default based on typical patterns
         type = 'expense';
       }
     }

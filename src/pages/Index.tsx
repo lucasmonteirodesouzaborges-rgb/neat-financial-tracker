@@ -21,6 +21,7 @@ const Index = () => {
   const {
     transactions,
     categories,
+    addCategory,
     addTransaction,
     updateTransaction,
     deleteTransaction,
@@ -234,6 +235,7 @@ const Index = () => {
           });
         }}
         categories={categories}
+        onAddCategory={addCategory}
       />
 
       <ImportDialog

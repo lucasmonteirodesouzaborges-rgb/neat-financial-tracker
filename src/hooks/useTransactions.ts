@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Transaction, TransactionType, DEFAULT_CATEGORIES, Category } from '@/types/finance';
+import { Transaction, DEFAULT_CATEGORIES, Category } from '@/types/finance';
 
 const STORAGE_KEY = 'cashflow_transactions';
 const CATEGORIES_KEY = 'cashflow_categories';
@@ -33,6 +33,15 @@ export function useTransactions() {
       localStorage.setItem(CATEGORIES_KEY, JSON.stringify(categories));
     }
   }, [categories, isLoaded]);
+
+  const addCategory = (category: Omit<Category, 'id'>) => {
+    const newCategory: Category = {
+      ...category,
+      id: crypto.randomUUID(),
+    };
+    setCategories(prev => [...prev, newCategory]);
+    return newCategory;
+  };
 
   const addTransaction = (transaction: Omit<Transaction, 'id' | 'createdAt'>) => {
     const newTransaction: Transaction = {
@@ -124,6 +133,7 @@ export function useTransactions() {
   return {
     transactions,
     categories,
+    addCategory,
     addTransaction,
     updateTransaction,
     deleteTransaction,

@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
-import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -39,6 +38,7 @@ interface TransactionFormProps {
   onOpenChange: (open: boolean) => void;
   onSubmit: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => void;
   categories: Category[];
+  onAddCategory?: (category: Omit<Category, 'id'>) => void;
 }
 
 export function TransactionForm({
@@ -46,6 +46,7 @@ export function TransactionForm({
   onOpenChange,
   onSubmit,
   categories,
+  onAddCategory,
 }: TransactionFormProps) {
   const [date, setDate] = useState<Date>(new Date());
   const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
@@ -55,6 +56,8 @@ export function TransactionForm({
   const [category, setCategory] = useState('');
   const [value, setValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
+  const [showNewCategory, setShowNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
 
   const filteredCategories = categories.filter((c) => c.type === type);
   const isPending = status === 'pending';
@@ -90,20 +93,31 @@ export function TransactionForm({
     onOpenChange(false);
   };
 
-  const getStatusLabel = () => {
-    if (type === 'income') {
-      return isPending ? 'A Receber' : 'Recebido';
-    }
-    return isPending ? 'A Pagar' : 'Pago';
+  const handleAddCategory = () => {
+    if (!newCategoryName.trim() || !onAddCategory) return;
+    
+    const colors = ['#10B981', '#06B6D4', '#8B5CF6', '#F97316', '#EC4899', '#EF4444'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+    
+    onAddCategory({
+      name: newCategoryName.trim(),
+      type,
+      color: randomColor,
+    });
+    
+    setCategory(newCategoryName.trim());
+    setNewCategoryName('');
+    setShowNewCategory(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Novo Lançamento</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Type Selection */}
           <div className="grid grid-cols-2 gap-3">
             <Button
               type="button"
@@ -135,32 +149,37 @@ export function TransactionForm({
             </Button>
           </div>
 
-          {/* Status Toggle */}
-          <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
-            <div>
-              <Label className="text-sm font-medium">Status</Label>
-              <p className="text-xs text-muted-foreground">
-                {type === 'income' 
-                  ? (isPending ? 'Valor ainda não recebido' : 'Valor já recebido')
-                  : (isPending ? 'Valor ainda não pago' : 'Valor já pago')
-                }
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className={cn('text-sm', !isPending && 'font-medium')}>
+          {/* Status Selection - Now as Buttons */}
+          <div className="space-y-2">
+            <Label>Status</Label>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                type="button"
+                variant={status === 'completed' ? 'default' : 'outline'}
+                className={cn(
+                  'w-full',
+                  status === 'completed' && 'bg-primary hover:bg-primary/90'
+                )}
+                onClick={() => setStatus('completed')}
+              >
                 {type === 'income' ? 'Recebido' : 'Pago'}
-              </span>
-              <Switch
-                checked={isPending}
-                onCheckedChange={(checked) => setStatus(checked ? 'pending' : 'completed')}
-              />
-              <span className={cn('text-sm', isPending && 'font-medium text-warning')}>
+              </Button>
+              <Button
+                type="button"
+                variant={status === 'pending' ? 'default' : 'outline'}
+                className={cn(
+                  'w-full',
+                  status === 'pending' && 'bg-warning hover:bg-warning/90 text-warning-foreground'
+                )}
+                onClick={() => setStatus('pending')}
+              >
                 {type === 'income' ? 'A Receber' : 'A Pagar'}
-              </span>
+              </Button>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {/* Dates */}
+          <div className={cn('grid gap-3', isPending ? 'grid-cols-2' : 'grid-cols-1')}>
             <div className="space-y-2">
               <Label>{isPending ? 'Data de Emissão' : 'Data'}</Label>
               <Popover>
@@ -173,12 +192,13 @@ export function TransactionForm({
                     {format(date, 'dd/MM/yyyy')}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent className="w-auto p-0 z-50" align="start">
                   <Calendar
                     mode="single"
                     selected={date}
                     onSelect={(d) => d && setDate(d)}
                     initialFocus
+                    className="pointer-events-auto"
                   />
                 </PopoverContent>
               </Popover>
@@ -197,12 +217,13 @@ export function TransactionForm({
                       {dueDate ? format(dueDate, 'dd/MM/yyyy') : 'Selecionar'}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto p-0 z-50" align="start">
                     <Calendar
                       mode="single"
                       selected={dueDate}
                       onSelect={setDueDate}
                       initialFocus
+                      className="pointer-events-auto"
                     />
                   </PopoverContent>
                 </Popover>
@@ -230,20 +251,71 @@ export function TransactionForm({
             />
           </div>
 
+          {/* Category with Add New Option */}
           <div className="space-y-2">
-            <Label>Categoria</Label>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                {filteredCategories.map((cat) => (
-                  <SelectItem key={cat.id} value={cat.name}>
-                    {cat.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center justify-between">
+              <Label>Categoria</Label>
+              {onAddCategory && (
+                <button
+                  type="button"
+                  onClick={() => setShowNewCategory(!showNewCategory)}
+                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                >
+                  <Plus className="h-3 w-3" />
+                  Nova categoria
+                </button>
+              )}
+            </div>
+            
+            {showNewCategory ? (
+              <div className="flex gap-2">
+                <Input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="Nome da categoria"
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleAddCategory}
+                  disabled={!newCategoryName.trim()}
+                >
+                  Adicionar
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowNewCategory(false);
+                    setNewCategoryName('');
+                  }}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            ) : (
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione uma categoria" />
+                </SelectTrigger>
+                <SelectContent className="z-50">
+                  {filteredCategories.map((cat) => (
+                    <SelectItem key={cat.id} value={cat.name}>
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-2 h-2 rounded-full" 
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        {cat.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {!isPending && (
@@ -256,7 +328,7 @@ export function TransactionForm({
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-50">
                   {PAYMENT_METHODS.map((method) => (
                     <SelectItem key={method.value} value={method.value}>
                       {method.label}

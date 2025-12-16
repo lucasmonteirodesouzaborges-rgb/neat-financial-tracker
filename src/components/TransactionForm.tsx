@@ -36,9 +36,9 @@ import {
 interface TransactionFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => void;
+  onSubmit: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => void | Promise<void>;
   categories: Category[];
-  onAddCategory?: (category: Omit<Category, 'id'>) => void;
+  onAddCategory?: (category: Omit<Category, 'id'>) => void | Promise<Category | null>;
 }
 
 export function TransactionForm({

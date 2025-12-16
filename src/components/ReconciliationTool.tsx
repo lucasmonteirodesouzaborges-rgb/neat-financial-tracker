@@ -30,7 +30,7 @@ interface ReconciliationToolProps {
   transactions: Transaction[];
   categories: Category[];
   initialBalance: number;
-  onUpdateTransaction: (id: string, updates: Partial<Transaction>) => void;
+  onUpdateTransaction: (id: string, updates: Partial<Transaction>) => void | Promise<void>;
 }
 
 export function ReconciliationTool({

@@ -39,11 +39,11 @@ import { cn } from '@/lib/utils';
 interface TransactionListProps {
   transactions: Transaction[];
   categories: Category[];
-  onUpdate: (id: string, updates: Partial<Transaction>) => void;
-  onDelete: (id: string) => void;
+  onUpdate: (id: string, updates: Partial<Transaction>) => void | Promise<void>;
+  onDelete: (id: string) => void | Promise<void>;
   onEdit?: (transaction: Transaction) => void;
-  onBulkUpdate?: (ids: string[], updates: Partial<Transaction>) => void;
-  onBulkDelete?: (ids: string[]) => void;
+  onBulkUpdate?: (ids: string[], updates: Partial<Transaction>) => void | Promise<void>;
+  onBulkDelete?: (ids: string[]) => void | Promise<void>;
 }
 
 export function TransactionList({

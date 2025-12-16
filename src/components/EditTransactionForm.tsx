@@ -37,9 +37,9 @@ interface EditTransactionFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   transaction: Transaction | null;
-  onSubmit: (id: string, updates: Partial<Transaction>) => void;
+  onSubmit: (id: string, updates: Partial<Transaction>) => void | Promise<void>;
   categories: Category[];
-  onAddCategory?: (category: Omit<Category, 'id'>) => void;
+  onAddCategory?: (category: Omit<Category, 'id'>) => void | Promise<Category | null>;
 }
 
 export function EditTransactionForm({

@@ -35,11 +35,7 @@ export async function parsePDF(file: File): Promise<ParsedTransaction[]> {
 
       // Debug (will show in console logs)
       if (i === 1) {
-        const sample = tokens.slice(0, 80).map(t => t.str);
-        const dates = tokens.filter(t => /^\d{2}\/\d{2}$/.test(t.str)).length;
-        const values = tokens.filter(t => /^[\d\.]+,\d{2}[CD\*]?$/.test(t.str)).length;
-        console.log('[PDF DEBUG] file:', file.name, 'page:', i, 'tokens:', tokens.length, 'dates:', dates, 'values:', values);
-        console.log('[PDF DEBUG] first tokens:', sample);
+        console.log('[PDF DEBUG] file:', file.name, 'page:', i, 'tokens:', tokens.length);
         console.log('[PDF DEBUG] page transactions:', pageTx);
       }
     }
@@ -90,12 +86,10 @@ function pageTextItemsToTokens(items: any[]): PdfToken[] {
     tokens.push({ str, x, y });
   }
 
-  // Reading order: top-to-bottom (y desc), left-to-right (x asc)
-  return tokens.sort((a, b) => (b.y - a.y) || (a.x - b.x));
+  return tokens;
 }
 
 function applyYearToDDMM(dateDDMM: string, year: number): string {
-  // dateDDMM expected: DD/MM
   const [day, month] = dateDDMM.split('/');
   if (!day || !month) return `${year}-01-01`;
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
@@ -104,12 +98,9 @@ function applyYearToDDMM(dateDDMM: string, year: number): string {
 function extractSicoobTransactionsFromTokens(tokens: PdfToken[]): ParsedTransaction[] {
   const transactions: ParsedTransaction[] = [];
 
-  // We intentionally parse in token stream order because, in these PDFs,
-  // the value and the C/D suffix can be split into separate text items.
-
   const isDate = (s: string) => /^\d{2}\/\d{2}$/.test(s);
   const isValue = (s: string) => /^[\d\.]+,\d{2}[CD\*]?$/.test(s);
-  const isSuffix = (s: string) => /^[CD]$/.test(s);
+  const isSuffix = (s: string) => /^[CD]$/i.test(s);
 
   const shouldSkipHistory = (desc: string) => {
     const d = desc.toUpperCase();
@@ -121,57 +112,72 @@ function extractSicoobTransactionsFromTokens(tokens: PdfToken[]): ParsedTransact
     );
   };
 
-  let i = 0;
-  while (i < tokens.length) {
-    const cur = tokens[i]?.str ?? '';
+  // Group tokens into rows by Y coordinate (with tolerance)
+  const rowMap = new Map<number, PdfToken[]>();
+  for (const t of tokens) {
+    const yBucket = Math.round(t.y);
+    const arr = rowMap.get(yBucket) ?? [];
+    arr.push(t);
+    rowMap.set(yBucket, arr);
+  }
 
-    if (!isDate(cur)) {
-      i++;
-      continue;
+  // Sort rows by Y desc, sort tokens within each row by X asc
+  const rows = Array.from(rowMap.entries())
+    .sort((a, b) => b[0] - a[0])
+    .map(([, toks]) => toks.sort((a, b) => a.x - b.x));
+
+  for (const row of rows) {
+    // Find date token in this row
+    const dateToken = row.find(t => isDate(t.str));
+    if (!dateToken) continue;
+
+    const dateIdx = row.indexOf(dateToken);
+
+    // Collect description: tokens after date that aren't value/suffix
+    const descTokens: string[] = [];
+    let valueToken: PdfToken | null = null;
+    let suffixToken: PdfToken | null = null;
+
+    // Check tokens AFTER date
+    for (let i = dateIdx + 1; i < row.length; i++) {
+      const t = row[i];
+      if (isValue(t.str)) {
+        valueToken = t;
+      } else if (isSuffix(t.str)) {
+        suffixToken = t;
+      } else if (!valueToken) {
+        descTokens.push(t.str);
+      }
     }
 
-    const dateDDMM = cur;
-    i++;
-
-    // Build description until we hit a value.
-    const descParts: string[] = [];
-    while (i < tokens.length && !isValue(tokens[i].str) && !isDate(tokens[i].str)) {
-      const s = tokens[i].str;
-
-      // Stop early if we're entering the "detail" lines of a PIX (Recebimento Pix, DOC.: etc.)
-      // Those appear after the main history row and should not be treated as new transactions.
-      const upper = s.toUpperCase();
-      if (upper === 'RECEBIMENTO' || upper === 'PAGAMENTO' || upper.startsWith('DOC')) break;
-
-      descParts.push(s);
-      i++;
+    // Also check tokens BEFORE date (value column sometimes renders first due to X position)
+    for (let i = 0; i < dateIdx; i++) {
+      const t = row[i];
+      if (isValue(t.str) && !valueToken) {
+        valueToken = t;
+      } else if (isSuffix(t.str) && !suffixToken) {
+        suffixToken = t;
+      }
     }
 
-    // Find a value token right after description
-    if (i >= tokens.length || !isValue(tokens[i].str)) {
-      // Could not complete a transaction; move on.
-      continue;
-    }
+    if (!valueToken) continue;
 
-    let valueToken = tokens[i].str;
-    i++;
-
-    // Some PDFs split the suffix into the next token.
-    if (!/[CD]$/.test(valueToken) && i < tokens.length && isSuffix(tokens[i].str)) {
-      valueToken = `${valueToken}${tokens[i].str}`;
-      i++;
-    }
-
-    const description = descParts.join(' ').replace(/\s+/g, ' ').trim();
+    const description = descTokens.join(' ').replace(/\s+/g, ' ').trim();
     if (!description || description.length < 3) continue;
     if (shouldSkipHistory(description)) continue;
 
-    const valueStr = valueToken.replace(/[CD\*]$/i, '');
-    const value = Number(valueStr.replace(/\./g, '').replace(',', '.'));
+    // Combine value with suffix if separate
+    let valueStr = valueToken.str;
+    if (suffixToken && !/[CD]$/i.test(valueStr)) {
+      valueStr = valueStr + suffixToken.str;
+    }
+
+    const numericPart = valueStr.replace(/[CD\*]$/i, '');
+    const value = Number(numericPart.replace(/\./g, '').replace(',', '.'));
     if (!Number.isFinite(value) || value === 0) continue;
 
-    // If suffix missing (some credit rows), infer: treat as income unless looks like debit.
-    const suffix = (valueToken.match(/[CD]$/i)?.[0] ?? '').toUpperCase();
+    // Determine type from suffix
+    const suffix = (valueStr.match(/[CD]$/i)?.[0] ?? '').toUpperCase();
     let type: TransactionType;
     if (suffix === 'D') type = 'expense';
     else if (suffix === 'C') type = 'income';
@@ -181,8 +187,7 @@ function extractSicoobTransactionsFromTokens(tokens: PdfToken[]): ParsedTransact
     }
 
     transactions.push({
-      // temporarily keep DD/MM; we’ll apply year later
-      date: dateDDMM,
+      date: dateToken.str,
       description: description.substring(0, 100),
       value,
       type,

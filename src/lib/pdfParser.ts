@@ -133,8 +133,8 @@ function extractYearFromLines(lines: string[]): number | null {
 function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
   const transactions: ParsedTransaction[] = [];
 
-  // Patterns
-  const datePattern = /^(\d{2}\/\d{2})\b/;
+  // Patterns - capture DD/MM or DD/MM/YY (for future transactions like 12/01/26)
+  const datePattern = /^(\d{2}\/\d{2}(?:\/\d{2})?)\b/;
   // Brazilian value: 1.234,56 or 1234,56 followed by optional C/D/*
   const valuePattern = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*([CD\*])?/gi;
 
@@ -267,26 +267,33 @@ function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
   return transactions;
 }
 
-function applyYearToDDMM(dateDDMM: string, year: number, isFuture: boolean = false): string {
-  const parts = dateDDMM.split('/');
+function applyYearToDDMM(dateStr: string, year: number, isFuture: boolean = false): string {
+  const parts = dateStr.split('/');
+  
+  // Format DD/MM/YY - year already present (e.g., 12/01/26 → 2026-01-12)
+  if (parts.length === 3) {
+    const [day, month, yearShort] = parts;
+    const fullYear = 2000 + parseInt(yearShort, 10);
+    console.log(`[PDF] Data com ano completo: ${dateStr} → ${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+    return `${fullYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+  
+  // Format DD/MM - need to determine year
   if (parts.length !== 2) return `${year}-01-01`;
   const [day, month] = parts;
   
-  // For future transactions, check if the date would be in the past with current year
-  // If so, use the next year
+  // For future transactions without explicit year, check if date would be in the past
   if (isFuture) {
     const today = new Date();
     const transactionMonth = parseInt(month, 10);
     const transactionDay = parseInt(day, 10);
-    const currentMonth = today.getMonth() + 1; // 0-indexed
+    const currentMonth = today.getMonth() + 1;
     const currentDay = today.getDate();
     
-    // If the month is before current month, or same month but day is before current day
-    // Then this future transaction must be for next year
     if (transactionMonth < currentMonth || 
         (transactionMonth === currentMonth && transactionDay < currentDay)) {
       const nextYear = year + 1;
-      console.log(`[PDF] Transação futura ${dateDDMM} ajustada para ano ${nextYear}`);
+      console.log(`[PDF] Transação futura ${dateStr} ajustada para ano ${nextYear}`);
       return `${nextYear}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     }
   }

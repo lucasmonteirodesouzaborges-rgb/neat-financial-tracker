@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { format } from 'date-fns';
+import { format, isPast, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   ArrowDownCircle,
@@ -9,16 +8,11 @@ import {
   Trash2,
   Check,
   AlertCircle,
+  Clock,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -57,6 +51,12 @@ export function TransactionList({
     return PAYMENT_METHODS.find((m) => m.value === method)?.label || '-';
   };
 
+  const isOverdue = (transaction: Transaction) => {
+    if (transaction.status !== 'pending' || !transaction.dueDate) return false;
+    const dueDate = new Date(transaction.dueDate);
+    return isPast(dueDate) && !isToday(dueDate);
+  };
+
   if (transactions.length === 0) {
     return (
       <div className="text-center py-12">
@@ -75,6 +75,8 @@ export function TransactionList({
     <div className="space-y-2">
       {transactions.map((transaction) => {
         const isUncategorized = !transaction.category;
+        const isPending = transaction.status === 'pending';
+        const overdue = isOverdue(transaction);
         const filteredCategories = categories.filter(
           (c) => c.type === transaction.type
         );
@@ -84,7 +86,9 @@ export function TransactionList({
             key={transaction.id}
             className={cn(
               'flex items-center gap-4 p-4 rounded-xl bg-card shadow-card transition-all duration-200 hover:shadow-card-hover animate-slide-up',
-              isUncategorized && 'ring-2 ring-warning/50 bg-warning-muted'
+              isUncategorized && !isPending && 'ring-2 ring-warning/50 bg-warning-muted',
+              isPending && 'bg-muted/50',
+              overdue && 'ring-2 ring-expense/50 bg-expense-muted'
             )}
           >
             <div
@@ -92,7 +96,8 @@ export function TransactionList({
                 'flex-shrink-0 p-2 rounded-lg',
                 transaction.type === 'income'
                   ? 'bg-income/10 text-income'
-                  : 'bg-expense/10 text-expense'
+                  : 'bg-expense/10 text-expense',
+                isPending && 'opacity-60'
               )}
             >
               {transaction.type === 'income' ? (
@@ -103,21 +108,42 @@ export function TransactionList({
             </div>
 
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="font-medium truncate">{transaction.description}</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <p className={cn('font-medium truncate', isPending && 'text-muted-foreground')}>
+                  {transaction.description}
+                </p>
+                {isPending && (
+                  <Badge 
+                    variant="outline" 
+                    className={cn(
+                      'text-xs',
+                      overdue 
+                        ? 'border-expense text-expense' 
+                        : 'border-warning text-warning'
+                    )}
+                  >
+                    <Clock className="h-3 w-3 mr-1" />
+                    {transaction.type === 'income' ? 'A Receber' : 'A Pagar'}
+                  </Badge>
+                )}
                 {transaction.isImported && (
                   <Badge variant="secondary" className="text-xs">
                     <Upload className="h-3 w-3 mr-1" />
                     Importado
                   </Badge>
                 )}
-                {isUncategorized && (
+                {isUncategorized && !isPending && (
                   <Badge
                     variant="outline"
                     className="text-xs border-warning text-warning"
                   >
                     <AlertCircle className="h-3 w-3 mr-1" />
                     Categorizar
+                  </Badge>
+                )}
+                {overdue && (
+                  <Badge variant="destructive" className="text-xs">
+                    Vencido
                   </Badge>
                 )}
               </div>
@@ -127,6 +153,14 @@ export function TransactionList({
                     locale: ptBR,
                   })}
                 </span>
+                {transaction.dueDate && (
+                  <>
+                    <span>•</span>
+                    <span className={cn(overdue && 'text-expense font-medium')}>
+                      Venc: {format(new Date(transaction.dueDate), "dd/MM", { locale: ptBR })}
+                    </span>
+                  </>
+                )}
                 <span>•</span>
                 {isUncategorized ? (
                   <Popover>
@@ -165,7 +199,8 @@ export function TransactionList({
               <span
                 className={cn(
                   'font-semibold text-lg',
-                  transaction.type === 'income' ? 'text-income' : 'text-expense'
+                  transaction.type === 'income' ? 'text-income' : 'text-expense',
+                  isPending && 'opacity-60'
                 )}
               >
                 {transaction.type === 'expense' ? '-' : '+'}
@@ -179,7 +214,21 @@ export function TransactionList({
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  {!transaction.isReconciled && (
+                  {isPending && (
+                    <DropdownMenuItem
+                      onClick={() =>
+                        onUpdate(transaction.id, { 
+                          status: 'completed',
+                          isReconciled: true,
+                          date: format(new Date(), 'yyyy-MM-dd')
+                        })
+                      }
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2 text-income" />
+                      Marcar como {transaction.type === 'income' ? 'Recebido' : 'Pago'}
+                    </DropdownMenuItem>
+                  )}
+                  {!transaction.isReconciled && !isPending && (
                     <DropdownMenuItem
                       onClick={() =>
                         onUpdate(transaction.id, { isReconciled: true })

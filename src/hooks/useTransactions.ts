@@ -79,20 +79,34 @@ export function useTransactions() {
       return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
     });
 
-    const totalIncome = monthlyTransactions
+    const completedMonthly = monthlyTransactions.filter(t => t.status === 'completed');
+
+    const totalIncome = completedMonthly
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.value, 0);
 
-    const totalExpense = monthlyTransactions
+    const totalExpense = completedMonthly
       .filter(t => t.type === 'expense')
       .reduce((sum, t) => sum + t.value, 0);
 
-    const allTimeIncome = transactions
+    const allCompleted = transactions.filter(t => t.status === 'completed');
+
+    const allTimeIncome = allCompleted
       .filter(t => t.type === 'income')
       .reduce((sum, t) => sum + t.value, 0);
 
-    const allTimeExpense = transactions
+    const allTimeExpense = allCompleted
       .filter(t => t.type === 'expense')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    // A Receber (pending income)
+    const toReceive = transactions
+      .filter(t => t.type === 'income' && t.status === 'pending')
+      .reduce((sum, t) => sum + t.value, 0);
+
+    // A Pagar (pending expense)
+    const toPay = transactions
+      .filter(t => t.type === 'expense' && t.status === 'pending')
       .reduce((sum, t) => sum + t.value, 0);
 
     return {
@@ -100,6 +114,9 @@ export function useTransactions() {
       monthlyExpense: totalExpense,
       monthlyBalance: totalIncome - totalExpense,
       currentBalance: allTimeIncome - allTimeExpense,
+      toReceive,
+      toPay,
+      projectedBalance: allTimeIncome - allTimeExpense + toReceive - toPay,
       uncategorizedCount,
     };
   }, [transactions, uncategorizedCount]);

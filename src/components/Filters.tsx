@@ -16,12 +16,13 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
-import { TransactionType, Category } from '@/types/finance';
+import { TransactionType, TransactionStatus, Category } from '@/types/finance';
 
 export interface FilterState {
   startDate: Date | null;
   endDate: Date | null;
   type: TransactionType | 'all';
+  status: TransactionStatus | 'all';
   category: string | 'all';
   onlyUncategorized: boolean;
 }
@@ -53,6 +54,7 @@ export function Filters({ filters, onFiltersChange, categories }: FiltersProps) 
   const activeFiltersCount = [
     filters.startDate || filters.endDate,
     filters.type !== 'all',
+    filters.status !== 'all',
     filters.category !== 'all',
     filters.onlyUncategorized,
   ].filter(Boolean).length;
@@ -62,6 +64,7 @@ export function Filters({ filters, onFiltersChange, categories }: FiltersProps) 
       startDate: null,
       endDate: null,
       type: 'all',
+      status: 'all',
       category: 'all',
       onlyUncategorized: false,
     });
@@ -141,6 +144,23 @@ export function Filters({ filters, onFiltersChange, categories }: FiltersProps) 
         </SelectContent>
       </Select>
 
+      {/* Status filter */}
+      <Select
+        value={filters.status}
+        onValueChange={(value) =>
+          onFiltersChange({ ...filters, status: value as TransactionStatus | 'all' })
+        }
+      >
+        <SelectTrigger className="w-36 h-9">
+          <SelectValue placeholder="Status" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">Todos status</SelectItem>
+          <SelectItem value="completed">Realizados</SelectItem>
+          <SelectItem value="pending">Pendentes</SelectItem>
+        </SelectContent>
+      </Select>
+
       {/* Category filter */}
       <Select
         value={filters.category}
@@ -173,7 +193,7 @@ export function Filters({ filters, onFiltersChange, categories }: FiltersProps) 
         }
         className={filters.onlyUncategorized ? 'bg-warning hover:bg-warning/90' : ''}
       >
-        Pendentes
+        Pendentes Cat.
       </Button>
 
       {/* Clear filters */}

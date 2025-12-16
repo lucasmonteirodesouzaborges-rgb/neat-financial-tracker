@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Calendar } from '@/components/ui/calendar';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -27,6 +28,7 @@ import { cn } from '@/lib/utils';
 import {
   Transaction,
   TransactionType,
+  TransactionStatus,
   PaymentMethod,
   Category,
   PAYMENT_METHODS,
@@ -46,13 +48,16 @@ export function TransactionForm({
   categories,
 }: TransactionFormProps) {
   const [date, setDate] = useState<Date>(new Date());
+  const [dueDate, setDueDate] = useState<Date | undefined>(undefined);
   const [description, setDescription] = useState('');
   const [type, setType] = useState<TransactionType>('expense');
+  const [status, setStatus] = useState<TransactionStatus>('completed');
   const [category, setCategory] = useState('');
   const [value, setValue] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('pix');
 
   const filteredCategories = categories.filter((c) => c.type === type);
+  const isPending = status === 'pending';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,23 +67,34 @@ export function TransactionForm({
 
     onSubmit({
       date: format(date, 'yyyy-MM-dd'),
+      dueDate: isPending && dueDate ? format(dueDate, 'yyyy-MM-dd') : undefined,
       description,
       category: category || null,
       value: numericValue,
       type,
-      paymentMethod,
+      status,
+      paymentMethod: isPending ? null : paymentMethod,
       isImported: false,
-      isReconciled: false,
+      isReconciled: !isPending,
     });
 
     // Reset form
     setDate(new Date());
+    setDueDate(undefined);
     setDescription('');
     setType('expense');
+    setStatus('completed');
     setCategory('');
     setValue('');
     setPaymentMethod('pix');
     onOpenChange(false);
+  };
+
+  const getStatusLabel = () => {
+    if (type === 'income') {
+      return isPending ? 'A Receber' : 'Recebido';
+    }
+    return isPending ? 'A Pagar' : 'Pago';
   };
 
   return (
@@ -119,27 +135,79 @@ export function TransactionForm({
             </Button>
           </div>
 
-          <div className="space-y-2">
-            <Label>Data</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start text-left font-normal"
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {format(date, 'dd/MM/yyyy')}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="single"
-                  selected={date}
-                  onSelect={(d) => d && setDate(d)}
-                  initialFocus
-                />
-              </PopoverContent>
-            </Popover>
+          {/* Status Toggle */}
+          <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+            <div>
+              <Label className="text-sm font-medium">Status</Label>
+              <p className="text-xs text-muted-foreground">
+                {type === 'income' 
+                  ? (isPending ? 'Valor ainda não recebido' : 'Valor já recebido')
+                  : (isPending ? 'Valor ainda não pago' : 'Valor já pago')
+                }
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={cn('text-sm', !isPending && 'font-medium')}>
+                {type === 'income' ? 'Recebido' : 'Pago'}
+              </span>
+              <Switch
+                checked={isPending}
+                onCheckedChange={(checked) => setStatus(checked ? 'pending' : 'completed')}
+              />
+              <span className={cn('text-sm', isPending && 'font-medium text-warning')}>
+                {type === 'income' ? 'A Receber' : 'A Pagar'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>{isPending ? 'Data de Emissão' : 'Data'}</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {format(date, 'dd/MM/yyyy')}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={date}
+                    onSelect={(d) => d && setDate(d)}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {isPending && (
+              <div className="space-y-2">
+                <Label>Vencimento</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dueDate ? format(dueDate, 'dd/MM/yyyy') : 'Selecionar'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={dueDate}
+                      onSelect={setDueDate}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -178,27 +246,32 @@ export function TransactionForm({
             </Select>
           </div>
 
-          <div className="space-y-2">
-            <Label>Forma de Pagamento</Label>
-            <Select
-              value={paymentMethod}
-              onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PAYMENT_METHODS.map((method) => (
-                  <SelectItem key={method.value} value={method.value}>
-                    {method.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {!isPending && (
+            <div className="space-y-2">
+              <Label>Forma de Pagamento</Label>
+              <Select
+                value={paymentMethod}
+                onValueChange={(v) => setPaymentMethod(v as PaymentMethod)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_METHODS.map((method) => (
+                    <SelectItem key={method.value} value={method.value}>
+                      {method.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <Button type="submit" className="w-full">
-            Adicionar Lançamento
+            {isPending 
+              ? `Adicionar ${type === 'income' ? 'A Receber' : 'A Pagar'}`
+              : 'Adicionar Lançamento'
+            }
           </Button>
         </form>
       </DialogContent>

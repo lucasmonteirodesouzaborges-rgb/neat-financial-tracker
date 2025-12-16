@@ -14,7 +14,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts';
-import { format, subDays, parseISO, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Transaction, Category } from '@/types/finance';
 
@@ -42,16 +42,16 @@ export function Charts({ transactions, categories }: ChartsProps) {
 
     let runningBalance = 0;
     
-    // Calculate initial balance from transactions before this month
+    // Calculate initial balance from transactions before this month (only completed)
     transactions
-      .filter(t => new Date(t.date) < start)
+      .filter(t => new Date(t.date) < start && t.status === 'completed')
       .forEach(t => {
         runningBalance += t.type === 'income' ? t.value : -t.value;
       });
 
     return days.map(day => {
       const dayStr = format(day, 'yyyy-MM-dd');
-      const dayTransactions = transactions.filter(t => t.date === dayStr);
+      const dayTransactions = transactions.filter(t => t.date === dayStr && t.status === 'completed');
       
       dayTransactions.forEach(t => {
         runningBalance += t.type === 'income' ? t.value : -t.value;
@@ -78,7 +78,7 @@ export function Charts({ transactions, categories }: ChartsProps) {
     return last6Months.map(({ month, monthNum, year }) => {
       const monthTransactions = transactions.filter(t => {
         const date = new Date(t.date);
-        return date.getMonth() === monthNum && date.getFullYear() === year;
+        return date.getMonth() === monthNum && date.getFullYear() === year && t.status === 'completed';
       });
 
       const income = monthTransactions
@@ -93,7 +93,8 @@ export function Charts({ transactions, categories }: ChartsProps) {
     });
   }, [transactions]);
 
-  const categoryDistribution = useMemo(() => {
+  // Expense distribution
+  const expenseDistribution = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
@@ -102,6 +103,7 @@ export function Charts({ transactions, categories }: ChartsProps) {
       const date = new Date(t.date);
       return (
         t.type === 'expense' &&
+        t.status === 'completed' &&
         date.getMonth() === currentMonth &&
         date.getFullYear() === currentYear &&
         t.category
@@ -114,8 +116,41 @@ export function Charts({ transactions, categories }: ChartsProps) {
       return acc;
     }, {} as Record<string, number>);
 
+    const total = Object.values(byCategory).reduce((a, b) => a + b, 0);
+
     return Object.entries(byCategory)
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({ name, value, percentage: total > 0 ? (value / total) * 100 : 0 }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [transactions]);
+
+  // Income distribution
+  const incomeDistribution = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    const monthlyIncome = transactions.filter(t => {
+      const date = new Date(t.date);
+      return (
+        t.type === 'income' &&
+        t.status === 'completed' &&
+        date.getMonth() === currentMonth &&
+        date.getFullYear() === currentYear &&
+        t.category
+      );
+    });
+
+    const byCategory = monthlyIncome.reduce((acc, t) => {
+      const cat = t.category || 'Sem categoria';
+      acc[cat] = (acc[cat] || 0) + t.value;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const total = Object.values(byCategory).reduce((a, b) => a + b, 0);
+
+    return Object.entries(byCategory)
+      .map(([name, value]) => ({ name, value, percentage: total > 0 ? (value / total) * 100 : 0 }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
   }, [transactions]);
@@ -215,27 +250,27 @@ export function Charts({ transactions, categories }: ChartsProps) {
         </div>
       </div>
 
-      {/* Category Distribution */}
-      <div className="bg-card rounded-xl p-5 shadow-card lg:col-span-2">
-        <h3 className="font-semibold mb-4">Distribuição por Categoria (Saídas do Mês)</h3>
-        {categoryDistribution.length > 0 ? (
-          <div className="flex flex-col lg:flex-row items-center gap-6">
-            <div className="h-64 w-full lg:w-1/2">
+      {/* Income Distribution */}
+      <div className="bg-card rounded-xl p-5 shadow-card">
+        <h3 className="font-semibold mb-4 text-income">Entradas por Categoria (Mês)</h3>
+        {incomeDistribution.length > 0 ? (
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-48 w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie
-                    data={categoryDistribution}
+                    data={incomeDistribution}
                     dataKey="value"
                     nameKey="name"
                     cx="50%"
                     cy="50%"
-                    outerRadius={100}
-                    innerRadius={60}
+                    outerRadius={80}
+                    innerRadius={50}
                     paddingAngle={2}
                   >
-                    {categoryDistribution.map((entry, index) => (
+                    {incomeDistribution.map((entry, index) => (
                       <Cell
-                        key={`cell-${index}`}
+                        key={`cell-income-${index}`}
                         fill={COLORS[index % COLORS.length]}
                       />
                     ))}
@@ -244,25 +279,96 @@ export function Charts({ transactions, categories }: ChartsProps) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            <div className="flex-1 grid grid-cols-2 gap-3">
-              {categoryDistribution.map((item, index) => (
-                <div key={item.name} className="flex items-center gap-2">
+            <div className="w-full space-y-2">
+              {incomeDistribution.map((item, index) => (
+                <div key={item.name} className="flex items-center gap-3">
                   <div
-                    className="w-3 h-3 rounded-full"
+                    className="w-3 h-3 rounded-full flex-shrink-0"
                     style={{ backgroundColor: COLORS[index % COLORS.length] }}
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatCurrency(item.value)}
-                    </p>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="truncate">{item.name}</span>
+                      <span className="font-medium">{formatCurrency(item.value)}</span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-1.5 mt-1">
+                      <div
+                        className="h-1.5 rounded-full transition-all"
+                        style={{
+                          width: `${item.percentage}%`,
+                          backgroundColor: COLORS[index % COLORS.length],
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
           </div>
         ) : (
-          <div className="h-64 flex items-center justify-center text-muted-foreground">
+          <div className="h-48 flex items-center justify-center text-muted-foreground">
+            Nenhuma entrada categorizada neste mês
+          </div>
+        )}
+      </div>
+
+      {/* Expense Distribution */}
+      <div className="bg-card rounded-xl p-5 shadow-card">
+        <h3 className="font-semibold mb-4 text-expense">Saídas por Categoria (Mês)</h3>
+        {expenseDistribution.length > 0 ? (
+          <div className="flex flex-col items-center gap-4">
+            <div className="h-48 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={expenseDistribution}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    innerRadius={50}
+                    paddingAngle={2}
+                  >
+                    {expenseDistribution.map((entry, index) => (
+                      <Cell
+                        key={`cell-expense-${index}`}
+                        fill={COLORS[index % COLORS.length]}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<CustomTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="w-full space-y-2">
+              {expenseDistribution.map((item, index) => (
+                <div key={item.name} className="flex items-center gap-3">
+                  <div
+                    className="w-3 h-3 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="truncate">{item.name}</span>
+                      <span className="font-medium">{formatCurrency(item.value)}</span>
+                    </div>
+                    <div className="w-full bg-muted rounded-full h-1.5 mt-1">
+                      <div
+                        className="h-1.5 rounded-full transition-all"
+                        style={{
+                          width: `${item.percentage}%`,
+                          backgroundColor: COLORS[index % COLORS.length],
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="h-48 flex items-center justify-center text-muted-foreground">
             Nenhuma despesa categorizada neste mês
           </div>
         )}

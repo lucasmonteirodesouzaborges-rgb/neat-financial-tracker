@@ -14,64 +14,62 @@ interface ParsedTransaction {
   type: TransactionType;
 }
 
+type PdfToken = { str: string; x: number; y: number };
+
 export async function parsePDF(file: File): Promise<ParsedTransaction[]> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
 
-    const allTextChunks: string[] = [];
     const allTransactions: ParsedTransaction[] = [];
+    let statementYear = new Date().getFullYear();
+
+    console.log(`[PDF] Iniciando parse de: ${file.name}, páginas: ${pdf.numPages}`);
 
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const textContent = await page.getTextContent();
-      const tokens = pageTextItemsToTokens(textContent.items as any[]);
+      const tokens = extractTokens(textContent.items as any[]);
 
-      // Keep some text for year inference / debugging.
-      allTextChunks.push(tokens.map(t => t.str).join(' '));
+      // Reconstruct lines from tokens
+      const lines = reconstructLines(tokens);
 
-      const pageTx = extractSicoobTransactionsFromTokens(tokens);
-      allTransactions.push(...pageTx);
+      console.log(`[PDF] Página ${i}: ${tokens.length} tokens, ${lines.length} linhas`);
 
-      // Debug (will show in console logs)
+      // Try to extract year from header on first page
       if (i === 1) {
-        console.log('[PDF DEBUG] file:', file.name, 'page:', i, 'tokens:', tokens.length);
-        console.log('[PDF DEBUG] page transactions:', pageTx);
+        statementYear = extractYearFromLines(lines) || statementYear;
+        console.log(`[PDF] Ano do extrato: ${statementYear}`);
       }
+
+      // Extract transactions from lines
+      const pageTx = extractTransactionsFromLines(lines);
+      console.log(`[PDF] Página ${i}: ${pageTx.length} transações encontradas`);
+
+      if (i === 1 && pageTx.length > 0) {
+        console.log('[PDF] Primeiras transações:', pageTx.slice(0, 3));
+      }
+
+      allTransactions.push(...pageTx);
     }
 
-    const fullText = allTextChunks.join('\n');
-
-    // Infer year from statement header (DD/MM/YYYY) if present; fallback current year.
-    const yearMatch = fullText.match(/\b\d{2}\/\d{2}\/(\d{4})\b/);
-    const statementYear = yearMatch ? Number(yearMatch[1]) : new Date().getFullYear();
-
-    // Apply year and final cleanup/dedupe.
+    // Apply year and deduplicate
     const withYear = allTransactions.map(t => ({
       ...t,
       date: applyYearToDDMM(t.date, statementYear),
     }));
 
-    const unique = withYear.filter((t, index, self) =>
-      index === self.findIndex(s =>
-        s.date === t.date &&
-        s.description === t.description &&
-        s.value === t.value &&
-        s.type === t.type
-      )
-    );
+    const unique = deduplicateTransactions(withYear);
 
-    console.log(`Extracted ${unique.length} Sicoob transactions from PDF`);
+    console.log(`[PDF] Total extraído: ${unique.length} transações únicas`);
     return unique;
   } catch (error) {
-    console.error('Error parsing PDF:', error);
+    console.error('[PDF] Erro ao processar:', error);
     throw error;
   }
 }
 
-type PdfToken = { str: string; x: number; y: number };
-
-function pageTextItemsToTokens(items: any[]): PdfToken[] {
+function extractTokens(items: any[]): PdfToken[] {
   const tokens: PdfToken[] = [];
 
   for (const item of items) {
@@ -89,34 +87,14 @@ function pageTextItemsToTokens(items: any[]): PdfToken[] {
   return tokens;
 }
 
-function applyYearToDDMM(dateDDMM: string, year: number): string {
-  const [day, month] = dateDDMM.split('/');
-  if (!day || !month) return `${year}-01-01`;
-  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-}
+function reconstructLines(tokens: PdfToken[]): string[] {
+  if (tokens.length === 0) return [];
 
-function extractSicoobTransactionsFromTokens(tokens: PdfToken[]): ParsedTransaction[] {
-  const transactions: ParsedTransaction[] = [];
-
-  const isDate = (s: string) => /^\d{2}\/\d{2}$/.test(s);
-  const isValue = (s: string) => /^[\d\.]+,\d{2}[CD\*]?$/.test(s);
-  const isSuffix = (s: string) => /^[CD]$/i.test(s);
-
-  const shouldSkipHistory = (desc: string) => {
-    const d = desc.toUpperCase();
-    return (
-      d.startsWith('SALDO') ||
-      d.includes('SALDO ') ||
-      d.includes('BLOQ') ||
-      d.includes('LIMITE')
-    );
-  };
-
-  // Group tokens into rows by Y coordinate using tolerance (PDF columns often have tiny Y differences)
+  // Sort by Y descending (top to bottom), then X ascending (left to right)
   const sorted = [...tokens].sort((a, b) => (b.y - a.y) || (a.x - b.x));
 
   const rows: PdfToken[][] = [];
-  const yTolerance = 2; // points
+  const yTolerance = 6; // Increased tolerance for Sicoob PDFs
 
   for (const t of sorted) {
     const lastRow = rows[rows.length - 1];
@@ -133,78 +111,133 @@ function extractSicoobTransactionsFromTokens(tokens: PdfToken[]): ParsedTransact
     }
   }
 
-  // Sort tokens within each row by X asc
-  const normalizedRows = rows.map(r => r.sort((a, b) => a.x - b.x));
+  // Sort tokens within each row by X, then join into lines
+  return rows.map(row => {
+    const sortedRow = row.sort((a, b) => a.x - b.x);
+    return sortedRow.map(t => t.str).join(' ');
+  });
+}
 
-  for (const row of normalizedRows) {
-    // Find date token in this row
-    const dateToken = row.find(t => isDate(t.str));
-    if (!dateToken) continue;
+function extractYearFromLines(lines: string[]): number | null {
+  for (const line of lines) {
+    // Look for "PERÍODO: DD/MM/YYYY" or similar date patterns
+    const match = line.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+    if (match) {
+      return Number(match[3]);
+    }
+  }
+  return null;
+}
 
-    const dateIdx = row.indexOf(dateToken);
+function extractTransactionsFromLines(lines: string[]): ParsedTransaction[] {
+  const transactions: ParsedTransaction[] = [];
 
-    // Collect description: tokens after date that aren't value/suffix
-    const descTokens: string[] = [];
-    let valueToken: PdfToken | null = null;
-    let suffixToken: PdfToken | null = null;
+  // Patterns
+  const datePattern = /^(\d{2}\/\d{2})\b/;
+  // Brazilian value: 1.234,56 or 1234,56 followed by optional C/D/*
+  const valuePattern = /(\d{1,3}(?:\.\d{3})*,\d{2})\s*([CD\*])?/gi;
 
-    // Check tokens AFTER date
-    for (let i = dateIdx + 1; i < row.length; i++) {
-      const t = row[i];
-      if (isValue(t.str)) {
-        valueToken = t;
-      } else if (isSuffix(t.str)) {
-        suffixToken = t;
-      } else if (!valueToken) {
-        descTokens.push(t.str);
+  const skipKeywords = ['SALDO', 'BLOQ', 'LIMITE', 'RESUMO', 'ANTERIOR', 'DISPONÍVEL'];
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    // Check if line should be skipped
+    const upperLine = trimmed.toUpperCase();
+    if (skipKeywords.some(kw => upperLine.includes(kw))) {
+      continue;
+    }
+
+    // Check if line starts with date DD/MM
+    const dateMatch = trimmed.match(datePattern);
+    if (!dateMatch) continue;
+
+    const date = dateMatch[1];
+
+    // Find all values in the line
+    const values: { value: number; suffix: string; index: number }[] = [];
+    let match;
+    valuePattern.lastIndex = 0;
+
+    while ((match = valuePattern.exec(trimmed)) !== null) {
+      const numStr = match[1];
+      const suffix = (match[2] || '').toUpperCase();
+      const value = parseFloat(numStr.replace(/\./g, '').replace(',', '.'));
+      if (Number.isFinite(value) && value > 0) {
+        values.push({ value, suffix, index: match.index });
       }
     }
 
-    // Also check tokens BEFORE date (value column sometimes renders first due to X position)
-    for (let i = 0; i < dateIdx; i++) {
-      const t = row[i];
-      if (isValue(t.str) && !valueToken) {
-        valueToken = t;
-      } else if (isSuffix(t.str) && !suffixToken) {
-        suffixToken = t;
-      }
+    if (values.length === 0) continue;
+
+    // Use the last value (usually the transaction value, not balance)
+    // In Sicoob, the pattern is usually: date | description | value C/D | balance
+    // We want the first value that has a C/D suffix, or the first value if none have suffix
+    let selectedValue = values.find(v => v.suffix === 'C' || v.suffix === 'D');
+    if (!selectedValue) {
+      selectedValue = values[0];
     }
 
-    if (!valueToken) continue;
+    // Extract description: text between date and value
+    const dateEndIndex = dateMatch.index! + dateMatch[0].length;
+    const valueStartIndex = selectedValue.index;
+    let description = trimmed.substring(dateEndIndex, valueStartIndex).trim();
 
-    const description = descTokens.join(' ').replace(/\s+/g, ' ').trim();
-    if (!description || description.length < 3) continue;
-    if (shouldSkipHistory(description)) continue;
+    // Clean up description
+    description = description.replace(/\s+/g, ' ').trim();
 
-    // Combine value with suffix if separate
-    let valueStr = valueToken.str;
-    if (suffixToken && !/[CD]$/i.test(valueStr)) {
-      valueStr = valueStr + suffixToken.str;
-    }
+    if (!description || description.length < 2) continue;
 
-    const numericPart = valueStr.replace(/[CD\*]$/i, '');
-    const value = Number(numericPart.replace(/\./g, '').replace(',', '.'));
-    if (!Number.isFinite(value) || value === 0) continue;
-
-    // Determine type from suffix
-    const suffix = (valueStr.match(/[CD]$/i)?.[0] ?? '').toUpperCase();
+    // Determine transaction type
     let type: TransactionType;
-    if (suffix === 'D') type = 'expense';
-    else if (suffix === 'C') type = 'income';
-    else {
-      const upper = description.toUpperCase();
-      type = /\bDEB\b|\bDEB\.|EMIT|TARIFA|PAGAMENTO|SAQUE/.test(upper) ? 'expense' : 'income';
+    if (selectedValue.suffix === 'D') {
+      type = 'expense';
+    } else if (selectedValue.suffix === 'C') {
+      type = 'income';
+    } else {
+      // Infer from description keywords
+      const descUpper = description.toUpperCase();
+      const expenseKeywords = ['DEB', 'EMIT', 'TARIFA', 'PAGAMENTO', 'SAQUE', 'TED', 'DOC', 'PIX ENV'];
+      const incomeKeywords = ['REC', 'CRED', 'DEP', 'PIX REC', 'TRANSF REC'];
+
+      if (expenseKeywords.some(kw => descUpper.includes(kw))) {
+        type = 'expense';
+      } else if (incomeKeywords.some(kw => descUpper.includes(kw))) {
+        type = 'income';
+      } else {
+        // Default based on typical patterns
+        type = 'expense';
+      }
     }
 
     transactions.push({
-      date: dateToken.str,
+      date,
       description: description.substring(0, 100),
-      value,
+      value: selectedValue.value,
       type,
     });
   }
 
   return transactions;
+}
+
+function applyYearToDDMM(dateDDMM: string, year: number): string {
+  const parts = dateDDMM.split('/');
+  if (parts.length !== 2) return `${year}-01-01`;
+  const [day, month] = parts;
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+function deduplicateTransactions(transactions: ParsedTransaction[]): ParsedTransaction[] {
+  return transactions.filter((t, index, self) =>
+    index === self.findIndex(s =>
+      s.date === t.date &&
+      s.description === t.description &&
+      s.value === t.value &&
+      s.type === t.type
+    )
+  );
 }
 
 export function convertPDFToTransactions(
